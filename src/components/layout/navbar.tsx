@@ -32,7 +32,7 @@ export function Navbar() {
 
     const authenticatedNavItems = [
         { name: 'Dashboard', path: '/dashboard' },
-        { name: 'My Courses', path: '/courses' },
+        { name: 'Courses', path: '/courses' },
         { name: 'Explore', path: '/explore-problems' },
         { name: 'Challenges', path: '/challenges' },
         { name: 'Community', path: '/community' },

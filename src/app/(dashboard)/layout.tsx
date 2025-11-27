@@ -1,4 +1,6 @@
-import { Sidebar } from '@/components/dashboard/sidebar'
+'use client'
+
+import { DashboardSidebar } from '@/components/dashboard/sidebar'
 
 export default function DashboardLayout({
     children,
@@ -10,12 +12,12 @@ export default function DashboardLayout({
             {/* Dashboard Container - Rounded with margins, fits viewport */}
             <div className="h-full container mx-auto">
                 <div className="h-full bg-white dark:bg-black backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 rounded-3xl shadow-2xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
-                    <div className="grid md:grid-cols-[240px_1fr] h-full">
+                    <div className="flex h-full">
                         {/* Sidebar */}
-                        <Sidebar />
+                        <DashboardSidebar />
 
                         {/* Main Content - Scrollable */}
-                        <main className="overflow-y-auto">
+                        <main className="flex-1 overflow-y-auto">
                             {children}
                         </main>
                     </div>
