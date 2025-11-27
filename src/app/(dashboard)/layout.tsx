@@ -6,13 +6,21 @@ export default function DashboardLayout({
     children: React.ReactNode
 }) {
     return (
-        <div className="h-full relative">
-            <div className="hidden h-full md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-[80] bg-gray-900">
-                <Sidebar />
+        <div className="h-screen pt-20 px-4 pb-4 overflow-hidden">
+            {/* Dashboard Container - Rounded with margins, fits viewport */}
+            <div className="h-full container mx-auto">
+                <div className="h-full bg-white dark:bg-black backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 rounded-3xl shadow-2xl shadow-black/5 dark:shadow-black/20 overflow-hidden">
+                    <div className="grid md:grid-cols-[240px_1fr] h-full">
+                        {/* Sidebar */}
+                        <Sidebar />
+
+                        {/* Main Content - Scrollable */}
+                        <main className="overflow-y-auto">
+                            {children}
+                        </main>
+                    </div>
+                </div>
             </div>
-            <main className="md:pl-72 h-full">
-                {children}
-            </main>
         </div>
     )
 }
