@@ -1,33 +1,29 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Zap, LogOut } from 'lucide-react'
 import { ModeToggle } from '@/components/mode-toggle'
 import { motion } from 'framer-motion'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { getCurrentUser } from '../../../actions/auth-actions'
-import { signOut } from '../../../actions/auth-actions'
+import { useAuthStore } from '@/store/auth-store'
 
 export function Navbar() {
     const pathname = usePathname()
+    const router = useRouter()
     const [hoveredPath, setHoveredPath] = useState<string | null>(null)
-    const [user, setUser] = useState<any>(null)
-    const [loading, setLoading] = useState(true)
+    const { user, loading, signOut } = useAuthStore()
 
-    useEffect(() => {
-        getCurrentUser().then(user => {
-            setUser(user)
-            setLoading(false)
-        })
-    }, [pathname]) // Re-fetch user when pathname changes
+    const handleLogout = async () => {
+        await signOut()
+        router.push('/login')
+    }
 
-    // Different nav items based on auth status
+    // Dynamic nav items based on auth status
     const publicNavItems = [
         { name: 'Home', path: '/' },
-        { name: 'Courses', path: '/courses' },
         { name: 'Explore Problems', path: '/explore-problems' },
         { name: 'Challenges', path: '/challenges' },
         { name: 'Resources', path: '/resources' },
@@ -100,7 +96,7 @@ export function Navbar() {
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => signOut()}
+                                onClick={handleLogout}
                                 className="rounded-full"
                             >
                                 <LogOut className="w-4 h-4 mr-2" />

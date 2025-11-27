@@ -89,8 +89,11 @@ export async function markLessonComplete(lessonId: string) {
             user_id: user.id,
             lesson_id: lessonId,
             course_id: lesson.modules.course_id,
+            progress: 100,
             completed: true,
             completed_at: new Date().toISOString(),
+        }, {
+            onConflict: 'user_id,lesson_id'
         })
 
     if (error) throw error
