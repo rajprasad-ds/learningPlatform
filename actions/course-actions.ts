@@ -102,6 +102,105 @@ export async function publishCourse(courseId: string, isPublished: boolean) {
     return { success: true }
 }
 
+export async function updateCourse(courseId: string, data: {
+    title?: string
+    description?: string
+    price?: number
+    thumbnail_url?: string
+    is_published?: boolean
+}) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { error } = await supabase
+        .from('courses')
+        .update(data)
+        .eq('id', courseId)
+        .eq('teacher_id', user.id)
+
+    if (error) throw error
+    revalidatePath(`/teacher/courses/${courseId}`)
+    revalidatePath('/teacher/courses')
+    return { success: true }
+}
+
+export async function deleteCourse(courseId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { error } = await supabase
+        .from('courses')
+        .delete()
+        .eq('id', courseId)
+        .eq('teacher_id', user.id)
+
+    if (error) throw error
+    revalidatePath('/teacher/courses')
+    return { success: true }
+}
+
+import { PaymentService } from '@/lib/payments/payment-service'
+
+export async function purchaseCourse(courseId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    // 1. Get course details
+    const { data: course } = await supabase
+        .from('courses')
+        .select('price')
+        .eq('id', courseId)
+        .single()
+
+    if (!course) throw new Error('Course not found')
+
+    try {
+        // 2. Process Payment
+        await PaymentService.processPayment(user.id, courseId, Number(course.price))
+
+        // 3. Create Enrollment
+        const { error: enrollmentError } = await supabase
+            .from('enrollments')
+            .insert({
+                user_id: user.id,
+                course_id: courseId
+            })
+
+        if (enrollmentError) {
+            // In a real system, we might want to refund here if enrollment fails
+            console.error('Enrollment failed after payment:', enrollmentError)
+            throw new Error('Enrollment failed')
+        }
+
+        revalidatePath(`/courses/${courseId}`)
+        return { success: true }
+    } catch (error) {
+        console.error('Purchase failed:', error)
+        return { success: false, error: 'Purchase failed' }
+    }
+}
+
+export async function getPublishedCourses() {
+    const supabase = await createClient()
+
+    const { data: courses } = await supabase
+        .from('courses')
+        .select(`
+            *,
+            profiles!courses_teacher_id_fkey(full_name, avatar_url)
+        `)
+        .eq('is_published', true)
+        .order('created_at', { ascending: false })
+
+    return courses || []
+}
+
 // Get all enrolled courses for the current user with progress
 export async function getEnrolledCourses() {
     try {

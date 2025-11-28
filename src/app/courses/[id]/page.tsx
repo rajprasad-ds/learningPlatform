@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Button } from '@/components/ui/button'
 import { BookOpen, Clock, PlayCircle, Lock, CheckCircle, ChevronLeft, Shield, Star, Users } from 'lucide-react'
 import Link from 'next/link'
+import { EnrollButton } from '@/components/courses/enroll-button'
 
 export default async function CoursePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -60,7 +60,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
 
                 <div className="relative z-10 max-w-7xl mx-auto">
                     {/* Back Button */}
-                    <Link href="/dashboard/courses" className="inline-block mb-8">
+                    <Link href="/courses" className="inline-block mb-8">
                         <button className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors group">
                             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                             <span className="font-medium">Back to All Courses</span>
@@ -187,9 +187,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
                                                 <span className="ml-auto text-sm font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">50% OFF</span>
                                             </div>
 
-                                            <Button className="w-full h-12 text-lg font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] mb-4">
-                                                Enroll Now
-                                            </Button>
+                                            <EnrollButton courseId={course.id} price={course.price} />
 
                                             <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-6">
                                                 30-day money-back guarantee • Lifetime access
@@ -208,9 +206,9 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
                                             </div>
 
                                             <Link href={`/courses/${id}/lessons/${modules?.[0]?.lessons?.[0]?.id}`}>
-                                                <Button className="w-full h-12 text-lg font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                                                <button className="w-full h-12 text-lg font-semibold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]">
                                                     Continue Learning
-                                                </Button>
+                                                </button>
                                             </Link>
                                         </div>
                                     )}

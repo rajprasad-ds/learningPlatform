@@ -54,26 +54,46 @@ export function generateSignedURL(options: SignedURLOptions): string {
 /**
  * Upload video to Bunny.net Stream
  */
+/**
+ * Upload video to Bunny.net Stream
+ */
 export async function uploadVideo(file: File, title: string): Promise<{ videoId: string; libraryId: string }> {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('title', title)
-
-    const response = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos`, {
+    // 1. Create Video Object
+    const createResponse = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos`, {
         method: 'POST',
         headers: {
             'AccessKey': BUNNY_API_KEY,
+            'Content-Type': 'application/json'
         },
-        body: formData,
+        body: JSON.stringify({ title }),
     })
 
-    if (!response.ok) {
-        throw new Error('Failed to upload video to Bunny.net')
+    if (!createResponse.ok) {
+        throw new Error('Failed to create video entry in Bunny.net')
     }
 
-    const data = await response.json()
+    const createData = await createResponse.json()
+    const videoId = createData.guid
+
+    // 2. Upload Video Content
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    const uploadResponse = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${videoId}`, {
+        method: 'PUT',
+        headers: {
+            'AccessKey': BUNNY_API_KEY,
+            'Content-Type': 'application/octet-stream',
+        },
+        body: buffer,
+    })
+
+    if (!uploadResponse.ok) {
+        throw new Error('Failed to upload video content to Bunny.net')
+    }
+
     return {
-        videoId: data.guid,
+        videoId: videoId,
         libraryId: BUNNY_LIBRARY_ID,
     }
 }
