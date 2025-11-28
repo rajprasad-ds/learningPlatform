@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { BookOpen, Clock, PlayCircle, Lock, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 
-export default async function CoursePage({ params }: { params: { id: string } }) {
+export default async function CoursePage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
     const supabase = await createClient()
 
     // Get course details
@@ -15,7 +16,7 @@ export default async function CoursePage({ params }: { params: { id: string } })
       *,
       profiles!courses_teacher_id_fkey(full_name, avatar_url)
     `)
-        .eq('id', params.id)
+        .eq('id', id)
         .single()
 
     if (error || !course) {
@@ -29,7 +30,7 @@ export default async function CoursePage({ params }: { params: { id: string } })
       *,
       lessons(*)
     `)
-        .eq('course_id', params.id)
+        .eq('course_id', id)
         .order('position')
 
     // Check if user is enrolled
@@ -41,7 +42,7 @@ export default async function CoursePage({ params }: { params: { id: string } })
             .from('enrollments')
             .select('*')
             .eq('user_id', user.id)
-            .eq('course_id', params.id)
+            .eq('course_id', id)
             .single()
 
         isEnrolled = !!enrollment
@@ -112,13 +113,13 @@ export default async function CoursePage({ params }: { params: { id: string } })
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2">
-                                    {module.lessons?.sort((a, b) => a.position - b.position).map((lesson, lessonIndex) => (
+                                    {module.lessons?.sort((a: any, b: any) => a.position - b.position).map((lesson: any, lessonIndex: number) => (
                                         <Link
                                             key={lesson.id}
-                                            href={isEnrolled || lesson.is_free ? `/courses/${params.id}/lessons/${lesson.id}` : '#'}
+                                            href={isEnrolled || lesson.is_free ? `/courses/${id}/lessons/${lesson.id}` : '#'}
                                             className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${isEnrolled || lesson.is_free
-                                                    ? 'hover:bg-accent cursor-pointer'
-                                                    : 'opacity-60 cursor-not-allowed'
+                                                ? 'hover:bg-accent cursor-pointer'
+                                                : 'opacity-60 cursor-not-allowed'
                                                 }`}
                                         >
                                             <div className="flex items-center gap-3">
