@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, Volume2, VolumeX, Maximize, Settings, Loader2 } from 'lucide-react'
+import {
+    Play, Pause, Volume2, VolumeX, Maximize, Minimize,
+    Settings, Loader2, Camera, FastForward, ChevronRight
+} from 'lucide-react'
 import { DynamicWatermark } from './dynamic-watermark'
 
 interface ProtectedVideoPlayerProps {
@@ -29,11 +32,14 @@ export function ProtectedVideoPlayer({
 
     const [isPlaying, setIsPlaying] = useState(false)
     const [isMuted, setIsMuted] = useState(false)
+    const [volume, setVolume] = useState(1)
     const [currentTime, setCurrentTime] = useState(0)
     const [duration, setDuration] = useState(0)
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [showControls, setShowControls] = useState(true)
     const [isLoading, setIsLoading] = useState(true)
+    const [playbackRate, setPlaybackRate] = useState(1)
+    const [isHoveringSpeed, setIsHoveringSpeed] = useState(false)
 
     // Initialize HLS.js for m3u8 playback
     useEffect(() => {
@@ -119,8 +125,24 @@ export function ProtectedVideoPlayer({
 
     const handleMute = () => {
         if (videoRef.current) {
-            videoRef.current.muted = !isMuted
-            setIsMuted(!isMuted)
+            const newMuted = !isMuted
+            videoRef.current.muted = newMuted
+            setIsMuted(newMuted)
+            if (newMuted) {
+                setVolume(0)
+            } else {
+                setVolume(1)
+                videoRef.current.volume = 1
+            }
+        }
+    }
+
+    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newVolume = parseFloat(e.target.value)
+        if (videoRef.current) {
+            videoRef.current.volume = newVolume
+            setVolume(newVolume)
+            setIsMuted(newVolume === 0)
         }
     }
 
@@ -165,6 +187,22 @@ export function ProtectedVideoPlayer({
         }
     }
 
+    const handleSpeedChange = (rate: number) => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = rate
+            setPlaybackRate(rate)
+        }
+    }
+
+    const handleScreenshot = () => {
+        if (canvasRef.current) {
+            const link = document.createElement('a')
+            link.download = `screenshot-${Date.now()}.png`
+            link.href = canvasRef.current.toDataURL('image/png')
+            link.click()
+        }
+    }
+
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60)
         const secs = Math.floor(seconds % 60)
@@ -174,7 +212,7 @@ export function ProtectedVideoPlayer({
     return (
         <div
             ref={containerRef}
-            className="relative w-full aspect-video bg-black rounded-lg overflow-hidden group"
+            className="relative w-full aspect-video bg-black rounded-lg overflow-hidden group select-none"
             onMouseEnter={() => setShowControls(true)}
             onMouseLeave={() => setShowControls(false)}
         >
@@ -189,6 +227,7 @@ export function ProtectedVideoPlayer({
             <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full object-contain"
+                onClick={handlePlayPause}
             />
 
             <DynamicWatermark
@@ -199,58 +238,153 @@ export function ProtectedVideoPlayer({
             />
 
             {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                    <Loader2 className="w-12 h-12 animate-spin text-white" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
+                    <Loader2 className="w-12 h-12 animate-spin text-purple-500" />
                 </div>
             )}
 
+            {/* Play/Pause Overlay Animation */}
+            {!isPlaying && !isLoading && (
+                <div
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    onClick={handlePlayPause}
+                >
+                    <div className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 shadow-2xl">
+                        <Play className="w-8 h-8 text-white fill-white ml-1" />
+                    </div>
+                </div>
+            )}
+
+            {/* Controls Container */}
             <div
-                className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+                className={`
+                    absolute bottom-0 left-0 right-0 p-4 transition-all duration-300 z-30
+                    ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}
+                `}
             >
-                <input
-                    type="range"
-                    min="0"
-                    max={duration}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    className="w-full h-1 mb-3 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-                    style={{
-                        background: `linear-gradient(to right, #9333ea 0%, #9333ea ${(currentTime / duration) * 100}%, #4b5563 ${(currentTime / duration) * 100}%, #4b5563 100%)`
-                    }}
-                />
+                {/* Frosted Glass Bar */}
+                <div className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 shadow-xl">
 
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handlePlayPause}
-                            className="text-white hover:text-purple-400 transition-colors"
-                        >
-                            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
-                        </button>
-
-                        <button
-                            onClick={handleMute}
-                            className="text-white hover:text-purple-400 transition-colors"
-                        >
-                            {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-                        </button>
-
-                        <span className="text-white text-sm">
-                            {formatTime(currentTime)} / {formatTime(duration)}
-                        </span>
+                    {/* Progress Bar */}
+                    <div className="relative w-full h-1 group/slider mb-4 cursor-pointer">
+                        <div className="absolute inset-0 bg-white/20 rounded-full"></div>
+                        <div
+                            className="absolute inset-y-0 left-0 bg-purple-600 rounded-full"
+                            style={{ width: `${(currentTime / duration) * 100}%` }}
+                        ></div>
+                        <input
+                            type="range"
+                            min="0"
+                            max={duration}
+                            value={currentTime}
+                            onChange={handleSeek}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <div
+                            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity pointer-events-none"
+                            style={{ left: `${(currentTime / duration) * 100}%` }}
+                        ></div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <button className="text-white hover:text-purple-400 transition-colors">
-                            <Settings className="w-5 h-5" />
-                        </button>
+                    <div className="flex items-center justify-between">
+                        {/* Left Controls */}
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={handlePlayPause}
+                                className="text-white hover:text-purple-400 transition-colors"
+                            >
+                                {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
+                            </button>
 
-                        <button
-                            onClick={handleFullscreen}
-                            className="text-white hover:text-purple-400 transition-colors"
-                        >
-                            <Maximize className="w-5 h-5" />
-                        </button>
+                            <div className="flex items-center gap-2 group/volume">
+                                <button
+                                    onClick={handleMute}
+                                    className="text-white hover:text-purple-400 transition-colors"
+                                >
+                                    {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                                </button>
+                                <div className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.1"
+                                        value={volume}
+                                        onChange={handleVolumeChange}
+                                        className="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <span className="text-white/80 text-xs font-medium font-mono">
+                                {formatTime(currentTime)} / {formatTime(duration)}
+                            </span>
+                        </div>
+
+                        {/* Right Controls */}
+                        <div className="flex items-center gap-3">
+
+                            {/* Speed Controller: Interactive Glass Pill */}
+                            <div
+                                className="relative group/speed"
+                                onMouseEnter={() => setIsHoveringSpeed(true)}
+                                onMouseLeave={() => setIsHoveringSpeed(false)}
+                            >
+                                <div className={`
+                                    flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 border border-white/5 
+                                    backdrop-blur-sm transition-all duration-300 cursor-pointer overflow-hidden
+                                    ${isHoveringSpeed ? 'w-48 bg-black/80' : 'w-16 hover:bg-white/20'}
+                                `}>
+                                    <FastForward className="w-3 h-3 text-white/80 flex-shrink-0" />
+
+                                    {isHoveringSpeed ? (
+                                        <div className="flex items-center justify-between w-full ml-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                                            {[0.5, 1, 1.5, 2].map((rate) => (
+                                                <button
+                                                    key={rate}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleSpeedChange(rate)
+                                                    }}
+                                                    className={`
+                                                        text-xs font-bold px-1.5 py-0.5 rounded transition-colors
+                                                        ${playbackRate === rate
+                                                            ? 'text-purple-400 bg-purple-500/10'
+                                                            : 'text-white/60 hover:text-white'
+                                                        }
+                                                    `}
+                                                >
+                                                    {rate}x
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs font-bold text-white ml-1">{playbackRate}x</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Screenshot Tool */}
+                            <button
+                                onClick={handleScreenshot}
+                                className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors group/shot relative"
+                                title="Take Screenshot"
+                            >
+                                <Camera className="w-5 h-5" />
+                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/shot:opacity-100 transition-opacity whitespace-nowrap">
+                                    Screenshot
+                                </span>
+                            </button>
+
+                            <div className="w-px h-4 bg-white/10 mx-1"></div>
+
+                            <button
+                                onClick={handleFullscreen}
+                                className="text-white hover:text-purple-400 transition-colors"
+                            >
+                                {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

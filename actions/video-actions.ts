@@ -25,6 +25,10 @@ export async function generateVideoToken(lessonId: string) {
         throw new Error('Lesson not found')
     }
 
+    if (!lesson.video_url) {
+        throw new Error('Video content is not available for this lesson')
+    }
+
     // Check if lesson is free
     if (lesson.is_free) {
         // Free lessons don't need enrollment check
@@ -183,6 +187,10 @@ export async function getLessonById(lessonId: string) {
 
 // Helper functions
 function generateToken(videoUrl: string, userId: string, userEmail: string) {
+    if (!videoUrl) {
+        throw new Error('Video URL not found for this lesson')
+    }
+
     // Extract video ID from URL (assuming format: bunny://video-id or just video-id)
     const videoId = videoUrl.replace('bunny://', '')
 
@@ -251,4 +259,22 @@ export async function getCourseModules(courseId: string) {
         ...module,
         lessons: module.lessons?.sort((a: any, b: any) => a.position - b.position) || []
     })) || []
+}
+
+// FIX: Populate missing video URLs for testing
+export async function fixLessonVideoUrls() {
+    const supabase = await createClient()
+
+    // Update all lessons that don't have a video_url
+    const { error } = await supabase
+        .from('lessons')
+        .update({
+            video_url: 'bunny://782751f8-6b03-4221-a6aa-9dae6acc900f',
+            video_provider: 'bunny',
+            video_id: '782751f8-6b03-4221-a6aa-9dae6acc900f'
+        })
+        .is('video_url', null)
+
+    if (error) throw error
+    return { success: true }
 }

@@ -1,6 +1,8 @@
 import { getLessonById, generateVideoToken, getCourseModules } from '@/actions/video-actions'
 import { LessonContent } from './lesson-content'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
+import { VideoErrorDisplay } from '@/components/video/video-error-display'
 
 interface LessonViewerProps {
     params: Promise<{ id: string; lessonId: string }>
@@ -8,6 +10,7 @@ interface LessonViewerProps {
 
 export default async function LessonViewer({ params }: LessonViewerProps) {
     const { id, lessonId } = await params
+    const supabase = await createClient()
 
     try {
         // Fetch all required data in parallel
@@ -16,6 +19,19 @@ export default async function LessonViewer({ params }: LessonViewerProps) {
             generateVideoToken(lessonId),
             getCourseModules(id)
         ])
+
+        // Check enrollment status
+        const { data: { user } } = await supabase.auth.getUser()
+        let isEnrolled = false
+        if (user) {
+            const { data: enrollment } = await supabase
+                .from('enrollments')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('course_id', id)
+                .single()
+            isEnrolled = !!enrollment
+        }
 
         // Flatten lessons for playlist count
         const allLessons = modules.flatMap((m: any) => m.lessons)
@@ -29,21 +45,10 @@ export default async function LessonViewer({ params }: LessonViewerProps) {
                 initialCompleted={false} // TODO: Fetch actual completion status
                 courseId={id}
                 lessonId={lessonId}
+                isEnrolled={isEnrolled}
             />
         )
     } catch (error: any) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-background p-4">
-                <div className="bg-white dark:bg-black rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-zinc-800 max-w-md text-center">
-                    <div className="text-red-500 mb-4 text-lg font-semibold">Error</div>
-                    <p className="text-gray-500 dark:text-gray-400 mb-6">{error.message || 'Failed to load lesson'}</p>
-                    <Link href={`/courses/${id}`}>
-                        <button className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-all hover:shadow-lg hover:shadow-purple-500/50 active:scale-95">
-                            Back to Course
-                        </button>
-                    </Link>
-                </div>
-            </div>
-        )
+        return <VideoErrorDisplay message={error.message || 'Failed to load lesson'} courseId={id} />
     }
 }
