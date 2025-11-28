@@ -46,6 +46,7 @@ export function ProtectedVideoPlayer({
     onComplete,
 }: ProtectedVideoPlayerProps) {
     const playerRef = useRef<MediaPlayerInstance>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
     const remote = useMediaRemote(playerRef)
 
     // Handle progress updates
@@ -62,7 +63,10 @@ export function ProtectedVideoPlayer({
     }
 
     return (
-        <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/10 group select-none">
+        <div
+            ref={containerRef}
+            className="relative w-full aspect-video bg-black rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/10 group select-none"
+        >
             <MediaPlayer
                 src={videoUrl}
                 viewType="video"
@@ -151,7 +155,7 @@ export function ProtectedVideoPlayer({
                                 <div className="flex items-center gap-3">
                                     <QualityController />
                                     <SpeedController />
-                                    <ScreenshotButton playerRef={playerRef} />
+                                    <ScreenshotButton containerRef={containerRef} />
                                     <div className="w-px h-4 bg-white/10 mx-1"></div>
                                     <FullscreenButton />
                                 </div>
@@ -260,7 +264,8 @@ function QualityController() {
                                 key={option.value}
                                 onClick={(e) => {
                                     e.stopPropagation()
-                                    option.select()
+                                    // Pass the event to select() to ensure context if needed
+                                    option.select(e.nativeEvent)
                                 }}
                                 className={`
                                     text-xs font-bold px-1.5 py-0.5 rounded transition-colors whitespace-nowrap
@@ -309,7 +314,7 @@ function SpeedController() {
                                 key={rate.value}
                                 onClick={(e) => {
                                     e.stopPropagation()
-                                    rate.select()
+                                    rate.select(e.nativeEvent)
                                 }}
                                 className={`
                                     text-xs font-bold px-1.5 py-0.5 rounded transition-colors
@@ -331,9 +336,9 @@ function SpeedController() {
     )
 }
 
-function ScreenshotButton({ playerRef }: { playerRef: React.RefObject<MediaPlayerInstance | null> }) {
+function ScreenshotButton({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
     const handleScreenshot = () => {
-        const video = (playerRef.current as unknown as HTMLElement)?.querySelector('video')
+        const video = containerRef.current?.querySelector('video')
         if (!video) return
 
         const canvas = document.createElement('canvas')
