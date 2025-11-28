@@ -33,6 +33,7 @@ interface ProtectedVideoPlayerProps {
     sessionId: string
     ipAddress?: string
     chaptersUrl?: string
+    thumbnailsUrl?: string
     onProgress?: (progress: number) => void
     onComplete?: () => void
 }
@@ -44,12 +45,14 @@ export function ProtectedVideoPlayer({
     sessionId,
     ipAddress,
     chaptersUrl,
+    thumbnailsUrl,
     onProgress,
     onComplete,
 }: ProtectedVideoPlayerProps) {
     const playerRef = useRef<MediaPlayerInstance>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const remote = useMediaRemote(playerRef)
+    const duration = useMediaState('duration')
 
     // Handle progress updates
     const onTimeUpdate = (detail: any) => {
@@ -58,6 +61,10 @@ export function ProtectedVideoPlayer({
             onProgress(progress)
         }
     }
+
+
+
+
 
     // Handle completion
     const onEnded = () => {
@@ -74,7 +81,7 @@ export function ProtectedVideoPlayer({
                 viewType="video"
                 streamType="on-demand"
                 logLevel="warn"
-                crossOrigin
+                crossOrigin="anonymous"
                 playsInline
                 title="Course Video"
                 className="w-full h-full"
@@ -133,28 +140,45 @@ export function ProtectedVideoPlayer({
 
                             {/* Time Slider with Thumbnails */}
                             <TimeSlider.Root className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer select-none touch-none">
-                                <TimeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden group-hover/slider:h-1.5 transition-all">
-                                    <TimeSlider.Progress className="absolute top-0 left-0 h-full w-full bg-white/40 rounded-full origin-left" />
-                                    <CustomTrackFill />
-                                </TimeSlider.Track>
+                                <div className="relative w-full h-1">
+                                    <TimeSlider.Track className="absolute inset-0 w-full h-full bg-white/20 rounded-full overflow-hidden">
+                                        <CustomTrackFill />
+                                    </TimeSlider.Track>
+
+                                    {/* Chapters Markers */}
+                                    {chaptersUrl && (
+                                        <TimeSlider.Chapters className="absolute inset-0 w-full h-full z-10">
+                                            {(cues, forwardRef) => (
+                                                <div className="relative w-full h-full flex items-center" ref={forwardRef}>
+                                                    {cues.map((cue) => (
+                                                        <div
+                                                            key={cue.startTime}
+                                                            className="absolute top-0 w-0.5 h-full bg-white/50"
+                                                            style={{ left: `${(cue.startTime / duration) * 100}%` }}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </TimeSlider.Chapters>
+                                    )}
+                                </div>
 
                                 <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30" />
 
-                                {/* Add thumbnails prop if VTT is available */}
-                                {chaptersUrl && (
-                                    <TimeSlider.Chapters className="relative w-full h-1 mt-1">
-                                        {(cues, forwardRef) => (
-                                            <div className="relative w-full h-full flex items-center" ref={forwardRef}>
-                                                {cues.map((cue) => (
-                                                    <div
-                                                        key={cue.startTime}
-                                                        className="absolute top-0 w-0.5 h-full bg-white/50"
-                                                        style={{ left: `${(cue.startTime / playerRef.current!.state.duration) * 100}%` }}
-                                                    />
-                                                ))}
-                                            </div>
+                                {/* Thumbnails Preview */}
+                                {thumbnailsUrl && (
+                                    <TimeSlider.Preview className="flex flex-col items-center opacity-0 group-hover/slider:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                        {chaptersUrl && (
+                                            <TimeSlider.ChapterTitle className="text-xs font-medium text-white bg-black/80 px-2 py-1 rounded mb-1" />
                                         )}
-                                    </TimeSlider.Chapters>
+                                        <TimeSlider.Thumbnail.Root
+                                            src={thumbnailsUrl}
+                                            className="block h-[160px] w-[280px] bg-black border border-white/10 rounded-lg overflow-hidden shadow-xl"
+                                        >
+                                            <TimeSlider.Thumbnail.Img className="w-full h-full object-cover" />
+                                        </TimeSlider.Thumbnail.Root>
+                                        <TimeSlider.Value className="text-[10px] font-mono text-white bg-black/80 px-1.5 py-0.5 rounded mt-1" />
+                                    </TimeSlider.Preview>
                                 )}
                             </TimeSlider.Root>
 

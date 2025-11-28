@@ -308,8 +308,8 @@ export async function createVideoEntry(title: string) {
     }
 }
 
-// Update lesson with video ID after successful upload
-export async function updateLessonVideo(lessonId: string, videoId: string) {
+// Update lesson with video ID and chapters after successful upload
+export async function updateLessonVideo(lessonId: string, videoId: string, chapters: any[] = []) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -320,7 +320,8 @@ export async function updateLessonVideo(lessonId: string, videoId: string) {
         .update({
             video_url: `bunny://${videoId}`,
             video_provider: 'bunny',
-            video_id: videoId
+            video_id: videoId,
+            chapters: chapters
         })
         .eq('id', lessonId)
 

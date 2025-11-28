@@ -18,7 +18,10 @@ interface Lesson {
     position: number
     is_free: boolean
     type: string
+    video_id?: string
 }
+
+
 
 interface Module {
     id: string
@@ -123,6 +126,10 @@ export function LessonContent({
         router.push(`/courses/${courseId}/lessons/${targetLesson.id}`)
     }
 
+    const thumbnailsUrl = lesson.video_id
+        ? `https://vz-246986e3-ec4.b-cdn.net/${lesson.video_id}/preview.vtt`
+        : undefined
+
     return (
         <div className="h-screen w-full bg-gray-50 dark:bg-background p-4 lg:p-6 flex flex-col page-enter">
             {/* Floating Container - Matching Dashboard Style */}
@@ -152,6 +159,8 @@ export function LessonContent({
                                     userId={videoToken.watermark.userId}
                                     sessionId={videoToken.watermark.sessionId}
                                     ipAddress={videoToken.watermark.ipAddress}
+                                    chaptersUrl={`/api/lessons/${lessonId}/chapters`}
+                                    thumbnailsUrl={thumbnailsUrl}
                                     onProgress={handleProgress}
                                     onComplete={handleComplete}
                                 />

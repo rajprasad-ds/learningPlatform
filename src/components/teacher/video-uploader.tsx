@@ -29,6 +29,35 @@ export function VideoUploader({
     const fileInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
 
+    const [chapters, setChapters] = useState<{ title: string, startTime: number }[]>([])
+    const [newChapterTitle, setNewChapterTitle] = useState('')
+    const [newChapterTime, setNewChapterTime] = useState('')
+
+    const parseTime = (timeStr: string) => {
+        const parts = timeStr.split(':')
+        if (parts.length === 1) return parseInt(parts[0]) || 0
+        const [mm, ss] = parts.map(Number)
+        return (mm || 0) * 60 + (ss || 0)
+    }
+
+    const formatTime = (seconds: number) => {
+        const mm = Math.floor(seconds / 60)
+        const ss = seconds % 60
+        return `${mm}:${ss.toString().padStart(2, '0')}`
+    }
+
+    const addChapter = () => {
+        if (!newChapterTitle || !newChapterTime) return
+        const startTime = parseTime(newChapterTime)
+        setChapters(prev => [...prev, { title: newChapterTitle, startTime }].sort((a, b) => a.startTime - b.startTime))
+        setNewChapterTitle('')
+        setNewChapterTime('')
+    }
+
+    const removeChapter = (index: number) => {
+        setChapters(prev => prev.filter((_, i) => i !== index))
+    }
+
     async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0]
         if (!file) return
@@ -73,17 +102,8 @@ export function VideoUploader({
 
                 xhr.onload = async () => {
                     if (xhr.status === 200) {
-                        // 3. Update Lesson Record (using existing action logic or new one)
-                        // We need to link the videoId to the lesson in Supabase
-                        // Since we bypassed uploadVideoAction, we need a way to update the lesson.
-                        // We can reuse uploadVideoAction but pass the videoId directly?
-                        // Or better, create a specific action to link video.
-                        // For now, let's use a FormData hack to reuse uploadVideoAction logic OR just call a new action.
-                        // Actually, uploadVideoAction expects a file. We should create a `linkVideoToLesson` action.
-                        // But to save time, I'll use a new server action here.
-
-                        // Let's assume updateLessonVideo(lessonId, videoId) exists.
-                        await updateLessonVideo(lessonId, videoId)
+                        // 3. Update Lesson Record with Video ID and Chapters
+                        await updateLessonVideo(lessonId, videoId, chapters)
                         resolve()
                     } else {
                         reject(new Error('Upload failed'))
@@ -110,7 +130,58 @@ export function VideoUploader({
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
+            {/* Chapters Editor */}
+            <div className="bg-gray-50 dark:bg-zinc-900/50 p-4 rounded-lg border border-gray-200 dark:border-zinc-800 space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">Video Chapters</h3>
+                    <span className="text-xs text-gray-500">Optional</span>
+                </div>
+
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        placeholder="Chapter Title"
+                        value={newChapterTitle}
+                        onChange={(e) => setNewChapterTitle(e.target.value)}
+                        className="flex-1 text-sm px-3 py-2 rounded-md border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                    />
+                    <input
+                        type="text"
+                        placeholder="MM:SS"
+                        value={newChapterTime}
+                        onChange={(e) => setNewChapterTime(e.target.value)}
+                        className="w-24 text-sm px-3 py-2 rounded-md border border-gray-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                    />
+                    <button
+                        onClick={addChapter}
+                        type="button"
+                        className="px-3 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
+                    >
+                        Add
+                    </button>
+                </div>
+
+                {chapters.length > 0 && (
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {chapters.map((chapter, index) => (
+                            <div key={index} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-2 rounded border border-gray-200 dark:border-zinc-800 text-sm">
+                                <div className="flex items-center gap-3">
+                                    <span className="font-mono text-gray-500">{formatTime(chapter.startTime)}</span>
+                                    <span className="font-medium">{chapter.title}</span>
+                                </div>
+                                <button
+                                    onClick={() => removeChapter(index)}
+                                    className="text-red-500 hover:text-red-700"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Current Video Status */}
             {currentVideoUrl ? (
                 <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
