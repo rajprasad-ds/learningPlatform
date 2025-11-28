@@ -6,11 +6,12 @@ import { usePathname } from 'next/navigation'
 export function ConditionalNavbar() {
     const pathname = usePathname()
 
-    // Hide navbar on lesson player pages
-    // Pattern: /courses/[id]/lessons/[lessonId]
+    // Hide navbar on lesson player pages and teacher studio
+    // Pattern: /courses/[id]/lessons/[lessonId] or /teacher/*
     const isLessonPage = pathname?.includes('/lessons/')
+    const isTeacherPage = pathname?.startsWith('/teacher')
 
-    if (isLessonPage) {
+    if (isLessonPage || isTeacherPage) {
         return null
     }
 

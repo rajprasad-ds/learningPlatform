@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ConditionalNavbar } from "@/components/layout/conditional-navbar";
 import { StoreInitializer } from "@/components/providers/store-initializer";
 import { GlobalOverlay } from "@/components/global-overlay";
+import { QueryProvider } from "@/components/providers/query-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,10 +38,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <StoreInitializer />
-          <GlobalOverlay />
-          <ConditionalNavbar />
-          {children}
+          <QueryProvider>
+            <StoreInitializer />
+            <GlobalOverlay />
+            <ConditionalNavbar />
+            {children}
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,6 +1,106 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export async function createCourse(formData: FormData) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Unauthorized')
+    }
+
+    const title = formData.get('title') as string
+    const description = formData.get('description') as string
+    const price = parseFloat(formData.get('price') as string) || 0
+    const thumbnail_url = formData.get('thumbnail_url') as string
+
+    const { data, error } = await supabase
+        .from('courses')
+        .insert({
+            title,
+            description,
+            price,
+            thumbnail_url: thumbnail_url || null,
+            teacher_id: user.id,
+            is_published: false
+        })
+        .select()
+        .single()
+
+    if (error) {
+        console.error('Error creating course:', error)
+        throw new Error('Failed to create course')
+    }
+
+    revalidatePath('/teacher/courses')
+    return { success: true, courseId: data.id }
+}
+
+export async function createModule(courseId: string, title: string, position: number) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { data, error } = await supabase
+        .from('modules')
+        .insert({
+            course_id: courseId,
+            title,
+            position
+        })
+        .select()
+        .single()
+
+    if (error) throw error
+    revalidatePath(`/teacher/courses/${courseId}`)
+    return { success: true, module: data }
+}
+
+export async function createLesson(moduleId: string, title: string, position: number) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { data, error } = await supabase
+        .from('lessons')
+        .insert({
+            module_id: moduleId,
+            title,
+            position,
+            type: 'video',
+            is_free: false
+        })
+        .select()
+        .single()
+
+    if (error) throw error
+    // We can't easily revalidate the course page from here without the course ID, 
+    // but the client will likely refresh or update local state.
+    // Actually, we can fetch the course ID if needed, but for now let's rely on client update.
+    return { success: true, lesson: data }
+}
+
+export async function publishCourse(courseId: string, isPublished: boolean) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { error } = await supabase
+        .from('courses')
+        .update({ is_published: isPublished })
+        .eq('id', courseId)
+        .eq('teacher_id', user.id)
+
+    if (error) throw error
+    revalidatePath(`/teacher/courses/${courseId}`)
+    revalidatePath('/teacher/courses')
+    return { success: true }
+}
 
 // Get all enrolled courses for the current user with progress
 export async function getEnrolledCourses() {

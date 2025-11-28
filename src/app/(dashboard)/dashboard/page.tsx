@@ -34,13 +34,19 @@ const upcomingClasses = [
 ]
 // ----------------
 
+import { useAuthStore } from '@/store/auth-store'
+
+// ...
+
 export default function DashboardPage() {
+    const { user } = useAuthStore()
+
     return (
         <div className="p-8 space-y-8">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Welcome back, Alex! 👋</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">Welcome back, {user?.user_metadata?.full_name?.split(' ')[0] || 'Student'}! 👋</h2>
                     <p className="text-muted-foreground">Here is what's happening with your courses today.</p>
                 </div>
                 <Button>Resume Learning</Button>
