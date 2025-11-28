@@ -13,6 +13,7 @@ import {
     useMediaRemote,
     useVideoQualityOptions,
     usePlaybackRateOptions,
+    useSliderState,
     type MediaPlayerInstance,
     type VideoQuality,
     type PlaybackRateOption
@@ -131,12 +132,14 @@ export function ProtectedVideoPlayer({
                         <div className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 shadow-xl">
 
                             {/* Time Slider with Thumbnails */}
-                            <TimeSlider.Root className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer">
+                            <TimeSlider.Root className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer select-none touch-none">
                                 <TimeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden group-hover/slider:h-1.5 transition-all">
-                                    <TimeSlider.Progress className="absolute top-0 left-0 h-full bg-white/40 rounded-full" />
-                                    <TimeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-10" />
+                                    <TimeSlider.Progress className="absolute top-0 left-0 h-full w-full bg-white/40 rounded-full origin-left" />
+                                    <CustomTrackFill />
                                 </TimeSlider.Track>
-                                <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity" />
+
+                                <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30" />
+
                                 {/* Add thumbnails prop if VTT is available */}
                                 {chaptersUrl && (
                                     <TimeSlider.Chapters className="relative w-full h-1 mt-1">
@@ -181,6 +184,19 @@ export function ProtectedVideoPlayer({
 }
 
 // --- Sub-Components ---
+
+function CustomTrackFill() {
+    const value = useSliderState('value')
+    const max = useSliderState('max')
+    const percent = max > 0 ? (value / max) * 100 : 0
+
+    return (
+        <div
+            className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-20 transition-[width] duration-100 ease-linear"
+            style={{ width: `${percent}%` }}
+        />
+    )
+}
 
 function PlayPauseOverlay() {
     const isPaused = useMediaState('paused')
