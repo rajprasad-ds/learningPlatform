@@ -15,6 +15,7 @@ export async function GET(
         .single()
 
     if (error || !lesson) {
+        console.error('Chapters API Error:', error)
         return new NextResponse('Lesson not found', { status: 404 })
     }
 

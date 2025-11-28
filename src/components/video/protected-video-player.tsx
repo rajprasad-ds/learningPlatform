@@ -33,7 +33,6 @@ interface ProtectedVideoPlayerProps {
     sessionId: string
     ipAddress?: string
     chaptersUrl?: string
-    thumbnailsUrl?: string
     onProgress?: (progress: number) => void
     onComplete?: () => void
 }
@@ -45,14 +44,13 @@ export function ProtectedVideoPlayer({
     sessionId,
     ipAddress,
     chaptersUrl,
-    thumbnailsUrl,
     onProgress,
     onComplete,
 }: ProtectedVideoPlayerProps) {
     const playerRef = useRef<MediaPlayerInstance>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const remote = useMediaRemote(playerRef)
-    const duration = useMediaState('duration')
+    const duration = useMediaState('duration', playerRef)
 
     // Handle progress updates
     const onTimeUpdate = (detail: any) => {
@@ -164,24 +162,7 @@ export function ProtectedVideoPlayer({
                                 </div>
 
                                 <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30" />
-
-                                {/* Thumbnails Preview */}
-                                {thumbnailsUrl && (
-                                    <TimeSlider.Preview className="flex flex-col items-center opacity-0 group-hover/slider:opacity-100 transition-opacity duration-200 pointer-events-none">
-                                        {chaptersUrl && (
-                                            <TimeSlider.ChapterTitle className="text-xs font-medium text-white bg-black/80 px-2 py-1 rounded mb-1" />
-                                        )}
-                                        <TimeSlider.Thumbnail.Root
-                                            src={thumbnailsUrl}
-                                            className="block h-[160px] w-[280px] bg-black border border-white/10 rounded-lg overflow-hidden shadow-xl"
-                                        >
-                                            <TimeSlider.Thumbnail.Img className="w-full h-full object-cover" />
-                                        </TimeSlider.Thumbnail.Root>
-                                        <TimeSlider.Value className="text-[10px] font-mono text-white bg-black/80 px-1.5 py-0.5 rounded mt-1" />
-                                    </TimeSlider.Preview>
-                                )}
                             </TimeSlider.Root>
-
                             <div className="flex items-center justify-between">
                                 {/* Left Controls */}
                                 <div className="flex items-center gap-4">
