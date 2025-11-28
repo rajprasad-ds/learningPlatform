@@ -2,15 +2,25 @@
 
 import { useState, useRef } from 'react'
 import { uploadVideoAction } from '@/actions/upload-actions'
-import { Upload, Loader2, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { Upload, CheckCircle, AlertTriangle, X } from 'lucide-react'
 
 interface VideoUploaderProps {
     lessonId: string
+    courseTitle: string
+    moduleTitle: string
+    lessonTitle: string
     currentVideoUrl?: string | null
     onUploadComplete?: () => void
 }
 
-export function VideoUploader({ lessonId, currentVideoUrl, onUploadComplete }: VideoUploaderProps) {
+export function VideoUploader({
+    lessonId,
+    courseTitle,
+    moduleTitle,
+    lessonTitle,
+    currentVideoUrl,
+    onUploadComplete
+}: VideoUploaderProps) {
     const [isUploading, setIsUploading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
@@ -36,9 +46,13 @@ export function VideoUploader({ lessonId, currentVideoUrl, onUploadComplete }: V
         setError('')
         setSuccess(false)
 
+        // Construct descriptive title for Bunny.net
+        // Format: Course Name - Module Name - Lesson Name
+        const videoTitle = `${courseTitle} - ${moduleTitle} - ${lessonTitle}`
+
         const formData = new FormData()
         formData.append('file', file)
-        formData.append('title', file.name)
+        formData.append('title', videoTitle)
         formData.append('lessonId', lessonId)
 
         try {
@@ -102,13 +116,19 @@ export function VideoUploader({ lessonId, currentVideoUrl, onUploadComplete }: V
                 className="hidden"
             />
 
-            {/* Loading State */}
+            {/* Custom Progress Bar UI */}
             {isUploading && (
-                <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                    <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
-                    <div className="flex-1">
-                        <p className="text-sm font-medium text-blue-900 dark:text-blue-300">Uploading to Bunny.net...</p>
-                        <p className="text-xs text-blue-700 dark:text-blue-400">Please wait, do not close this page.</p>
+                <div className="relative w-full h-12 bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden border border-purple-200 dark:border-purple-900/30">
+                    {/* Animated Progress Bar */}
+                    <div className="absolute inset-0 bg-purple-600/20 dark:bg-purple-600/30 w-full h-full animate-pulse">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/20 to-transparent w-[200%] animate-[shimmer_2s_infinite] translate-x-[-100%]" />
+                    </div>
+
+                    {/* Centered Text */}
+                    <div className="absolute inset-0 flex items-center justify-center gap-2">
+                        <span className="text-sm font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider animate-pulse">
+                            Uploading...
+                        </span>
                     </div>
                 </div>
             )}

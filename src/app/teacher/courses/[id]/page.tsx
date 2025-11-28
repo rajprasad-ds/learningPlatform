@@ -83,6 +83,7 @@ export default async function CourseEditorPage({ params }: CourseEditorProps) {
 
                         <CurriculumBuilder
                             courseId={course.id}
+                            courseTitle={course.title}
                             initialModules={modules}
                         />
                     </div>

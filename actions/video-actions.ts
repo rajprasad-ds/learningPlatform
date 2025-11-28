@@ -243,7 +243,8 @@ export async function getCourseModules(courseId: string) {
                 position,
                 is_free,
                 type,
-                module_id
+                module_id,
+                video_url
             )
         `)
         .eq('course_id', courseId)

@@ -3,17 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createModule, createLesson } from '@/actions/course-actions'
-import { Plus, GripVertical, ChevronDown, ChevronRight, Video, Loader2 } from 'lucide-react'
 import { VideoUploader } from './video-uploader'
-
-interface Lesson {
-    id: string
-    title: string
-    position: number
-    type: string
-    is_free: boolean
-    video_url?: string | null
-}
+import { ChevronDown, ChevronRight, GripVertical, Plus, Video, Trash2, Edit2 } from 'lucide-react'
 
 interface Module {
     id: string
@@ -22,12 +13,21 @@ interface Module {
     lessons: Lesson[]
 }
 
+interface Lesson {
+    id: string
+    title: string
+    position: number
+    video_url: string | null
+    is_free: boolean
+}
+
 interface CurriculumBuilderProps {
     courseId: string
+    courseTitle: string
     initialModules: Module[]
 }
 
-export function CurriculumBuilder({ courseId, initialModules }: CurriculumBuilderProps) {
+export function CurriculumBuilder({ courseId, courseTitle, initialModules }: CurriculumBuilderProps) {
     const router = useRouter()
     const [modules, setModules] = useState(initialModules)
     const [expandedModules, setExpandedModules] = useState<string[]>(initialModules.map(m => m.id))
@@ -135,6 +135,9 @@ export function CurriculumBuilder({ courseId, initialModules }: CurriculumBuilde
                                                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Video Content</h4>
                                                 <VideoUploader
                                                     lessonId={lesson.id}
+                                                    courseTitle={courseTitle}
+                                                    moduleTitle={module.title}
+                                                    lessonTitle={lesson.title}
                                                     currentVideoUrl={lesson.video_url}
                                                 />
                                             </div>
@@ -142,27 +145,27 @@ export function CurriculumBuilder({ courseId, initialModules }: CurriculumBuilde
                                     </div>
                                 ))}
 
-                                {/* Add Lesson Form */}
+                                {/* Create Lesson Form */}
                                 {creatingLessonInModule === module.id ? (
-                                    <div className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 rounded-lg border border-purple-500">
+                                    <div className="flex items-center gap-2 p-2">
                                         <input
                                             type="text"
                                             value={newLessonTitle}
                                             onChange={(e) => setNewLessonTitle(e.target.value)}
                                             placeholder="Lesson title..."
-                                            className="flex-1 px-3 py-1.5 bg-transparent outline-none text-sm"
+                                            className="flex-1 px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 text-sm"
                                             autoFocus
                                             onKeyDown={(e) => e.key === 'Enter' && handleCreateLesson(module.id)}
                                         />
                                         <button
                                             onClick={() => handleCreateLesson(module.id)}
-                                            className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-md font-medium"
+                                            className="px-3 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium"
                                         >
                                             Add
                                         </button>
                                         <button
                                             onClick={() => setCreatingLessonInModule(null)}
-                                            className="px-3 py-1.5 text-gray-500 text-xs hover:text-gray-700"
+                                            className="px-3 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400"
                                         >
                                             Cancel
                                         </button>
@@ -170,7 +173,7 @@ export function CurriculumBuilder({ courseId, initialModules }: CurriculumBuilde
                                 ) : (
                                     <button
                                         onClick={() => setCreatingLessonInModule(module.id)}
-                                        className="w-full py-2 flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/10 rounded-lg border border-dashed border-gray-300 dark:border-zinc-700 hover:border-purple-300 transition-all"
+                                        className="w-full py-2 flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-lg hover:border-purple-200 dark:hover:border-purple-900 transition-all"
                                     >
                                         <Plus className="w-4 h-4" />
                                         Add Lesson
@@ -180,28 +183,43 @@ export function CurriculumBuilder({ courseId, initialModules }: CurriculumBuilde
                         )}
                     </div>
                 ))}
-            </div>
 
-            {/* Add Module Form */}
-            <div className="pt-4">
-                <div className="flex gap-3">
-                    <input
-                        type="text"
-                        value={newModuleTitle}
-                        onChange={(e) => setNewModuleTitle(e.target.value)}
-                        placeholder="New Module Title..."
-                        className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                        onKeyDown={(e) => e.key === 'Enter' && handleCreateModule()}
-                    />
+                {/* Create Module Form */}
+                {isCreatingModule ? (
+                    <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-gray-200 dark:border-zinc-800">
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="text"
+                                value={newModuleTitle}
+                                onChange={(e) => setNewModuleTitle(e.target.value)}
+                                placeholder="Module title..."
+                                className="flex-1 px-4 py-2 rounded-lg bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700"
+                                autoFocus
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreateModule()}
+                            />
+                            <button
+                                onClick={handleCreateModule}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium"
+                            >
+                                Create Module
+                            </button>
+                            <button
+                                onClick={() => setIsCreatingModule(false)}
+                                className="px-4 py-2 text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : (
                     <button
-                        onClick={handleCreateModule}
-                        disabled={isCreatingModule || !newModuleTitle.trim()}
-                        className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-xl font-medium hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
+                        onClick={() => setIsCreatingModule(true)}
+                        className="w-full py-4 flex items-center justify-center gap-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-xl hover:border-purple-200 dark:hover:border-purple-900 transition-all font-medium"
                     >
-                        {isCreatingModule ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                        Add Module
+                        <Plus className="w-5 h-5" />
+                        Add New Module
                     </button>
-                </div>
+                )}
             </div>
         </div>
     )
