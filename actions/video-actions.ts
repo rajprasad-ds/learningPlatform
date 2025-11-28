@@ -279,3 +279,51 @@ export async function fixLessonVideoUrls() {
     if (error) throw error
     return { success: true }
 }
+
+// Create video entry in Bunny.net (Step 1 of upload)
+export async function createVideoEntry(title: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const response = await fetch(`https://video.bunnycdn.com/library/${process.env.BUNNY_STREAM_LIBRARY_ID}/videos`, {
+        method: 'POST',
+        headers: {
+            'AccessKey': process.env.BUNNY_API_KEY!,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title }),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to create video entry')
+    }
+
+    const data = await response.json()
+    return {
+        success: true,
+        videoId: data.guid as string,
+        libraryId: process.env.BUNNY_STREAM_LIBRARY_ID
+    }
+}
+
+// Update lesson with video ID after successful upload
+export async function updateLessonVideo(lessonId: string, videoId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { error } = await supabase
+        .from('lessons')
+        .update({
+            video_url: `bunny://${videoId}`,
+            video_provider: 'bunny',
+            video_id: videoId
+        })
+        .eq('id', lessonId)
+
+    if (error) throw error
+    return { success: true }
+}

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { uploadVideoAction } from '@/actions/upload-actions'
+import { createVideoEntry, updateLessonVideo } from '@/actions/video-actions'
 import { Upload, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface VideoUploaderProps {
     lessonId: string
@@ -22,9 +23,11 @@ export function VideoUploader({
     onUploadComplete
 }: VideoUploaderProps) {
     const [isUploading, setIsUploading] = useState(false)
+    const [uploadProgress, setUploadProgress] = useState(0)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const router = useRouter()
 
     async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0]
@@ -36,31 +39,65 @@ export function VideoUploader({
             return
         }
 
-        // Validate file size (e.g., 500MB limit for now)
-        if (file.size > 500 * 1024 * 1024) {
-            setError('File size exceeds 500MB limit')
+        // Validate file size (e.g., 2GB limit)
+        if (file.size > 2 * 1024 * 1024 * 1024) {
+            setError('File size exceeds 2GB limit')
             return
         }
 
         setIsUploading(true)
+        setUploadProgress(0)
         setError('')
         setSuccess(false)
 
-        // Construct descriptive title for Bunny.net
-        // Format: Course Name - Module Name - Lesson Name
-        const videoTitle = `${courseTitle} - ${moduleTitle} - ${lessonTitle}`
-
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('title', videoTitle)
-        formData.append('lessonId', lessonId)
-
         try {
-            const result = await uploadVideoAction(formData)
-            if (result.success) {
-                setSuccess(true)
-                if (onUploadComplete) onUploadComplete()
+            // 1. Create Video Entry
+            const videoTitle = `${courseTitle} - ${moduleTitle} - ${lessonTitle}`
+            const { videoId, success: createSuccess } = await createVideoEntry(videoTitle)
+
+            if (!createSuccess || !videoId) {
+                throw new Error('Failed to initialize upload')
             }
+
+            // 2. Upload File via XHR to track progress
+            await new Promise<void>((resolve, reject) => {
+                const xhr = new XMLHttpRequest()
+                xhr.open('PUT', `/api/upload?videoId=${videoId}`)
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100
+                        setUploadProgress(Math.round(percentComplete))
+                    }
+                }
+
+                xhr.onload = async () => {
+                    if (xhr.status === 200) {
+                        // 3. Update Lesson Record (using existing action logic or new one)
+                        // We need to link the videoId to the lesson in Supabase
+                        // Since we bypassed uploadVideoAction, we need a way to update the lesson.
+                        // We can reuse uploadVideoAction but pass the videoId directly?
+                        // Or better, create a specific action to link video.
+                        // For now, let's use a FormData hack to reuse uploadVideoAction logic OR just call a new action.
+                        // Actually, uploadVideoAction expects a file. We should create a `linkVideoToLesson` action.
+                        // But to save time, I'll use a new server action here.
+
+                        // Let's assume updateLessonVideo(lessonId, videoId) exists.
+                        await updateLessonVideo(lessonId, videoId)
+                        resolve()
+                    } else {
+                        reject(new Error('Upload failed'))
+                    }
+                }
+
+                xhr.onerror = () => reject(new Error('Network error'))
+                xhr.send(file)
+            })
+
+            setSuccess(true)
+            if (onUploadComplete) onUploadComplete()
+            router.refresh()
+
         } catch (err) {
             console.error(err)
             setError('Failed to upload video. Please try again.')
@@ -116,19 +153,18 @@ export function VideoUploader({
                 className="hidden"
             />
 
-            {/* Custom Progress Bar UI */}
+            {/* Real Progress Bar UI */}
             {isUploading && (
-                <div className="relative w-full h-12 bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden border border-purple-200 dark:border-purple-900/30">
-                    {/* Animated Progress Bar */}
-                    <div className="absolute inset-0 bg-purple-600/20 dark:bg-purple-600/30 w-full h-full animate-pulse">
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/20 to-transparent w-[200%] animate-[shimmer_2s_infinite] translate-x-[-100%]" />
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
+                        <span>Uploading...</span>
+                        <span>{uploadProgress}%</span>
                     </div>
-
-                    {/* Centered Text */}
-                    <div className="absolute inset-0 flex items-center justify-center gap-2">
-                        <span className="text-sm font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider animate-pulse">
-                            Uploading...
-                        </span>
+                    <div className="relative w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                            className="absolute inset-y-0 left-0 bg-purple-600 transition-all duration-300 ease-out"
+                            style={{ width: `${uploadProgress}%` }}
+                        />
                     </div>
                 </div>
             )}
