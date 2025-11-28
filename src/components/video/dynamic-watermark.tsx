@@ -11,7 +11,7 @@ interface DynamicWatermarkProps {
 }
 
 export function DynamicWatermark({ userEmail, userId, sessionId, ipAddress }: DynamicWatermarkProps) {
-    const [position, setPosition] = useState({ top: '10%', left: '10%' })
+    const [position, setPosition] = useState<{ top?: string; left?: string; right?: string; bottom?: string }>({ top: '10%', left: '10%' })
     const [variant, setVariant] = useState(0)
 
     useEffect(() => {
