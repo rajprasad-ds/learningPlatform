@@ -78,7 +78,7 @@ export function LessonContent({
     }
 
     return (
-        <div className="h-screen w-full bg-gray-50 dark:bg-background p-4 lg:p-6 flex flex-col">
+        <div className="h-screen w-full bg-gray-50 dark:bg-background p-4 lg:p-6 flex flex-col page-enter">
             {/* Floating Container - Matching Dashboard Style */}
             <div className="flex-1 bg-white dark:bg-black rounded-3xl shadow-2xl shadow-black/5 dark:shadow-black/20 border border-gray-200/50 dark:border-gray-700/50 overflow-hidden flex flex-col relative">
 
