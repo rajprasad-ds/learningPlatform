@@ -218,3 +218,37 @@ function getUserAgent(): string {
     // TODO: Get actual user agent from headers
     return 'Mozilla/5.0'
 }
+
+// Get all modules and lessons for a course (for playlist)
+export async function getCourseModules(courseId: string) {
+    const supabase = await createClient()
+
+    const { data: modules, error } = await supabase
+        .from('modules')
+        .select(`
+            id,
+            title,
+            position,
+            lessons(
+                id,
+                title,
+                position,
+                is_free,
+                type,
+                module_id
+            )
+        `)
+        .eq('course_id', courseId)
+        .order('position')
+
+    if (error) {
+        console.error('Error fetching modules:', error)
+        return []
+    }
+
+    // Sort lessons within each module
+    return modules?.map(module => ({
+        ...module,
+        lessons: module.lessons?.sort((a: any, b: any) => a.position - b.position) || []
+    })) || []
+}
