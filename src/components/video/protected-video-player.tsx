@@ -8,6 +8,7 @@ import {
     Controls,
     TimeSlider,
     VolumeSlider,
+    Gesture,
     useMediaState,
     useMediaRemote,
     useVideoQualityOptions,
@@ -92,6 +93,17 @@ export function ProtectedVideoPlayer({
                     )}
                 </MediaProvider>
 
+                <Gesture
+                    className="absolute inset-0 z-0 block h-full w-full"
+                    event="pointerup"
+                    action="toggle:paused"
+                />
+                <Gesture
+                    className="absolute inset-0 z-0 block h-full w-full"
+                    event="dblpointerup"
+                    action="toggle:fullscreen"
+                />
+
                 {/* Custom Watermark Overlay */}
                 <div className="absolute inset-0 pointer-events-none z-[50] overflow-hidden">
                     <DynamicWatermark
@@ -121,8 +133,8 @@ export function ProtectedVideoPlayer({
                             {/* Time Slider with Thumbnails */}
                             <TimeSlider.Root className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer">
                                 <TimeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden group-hover/slider:h-1.5 transition-all">
-                                    <TimeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-600 rounded-full" />
                                     <TimeSlider.Progress className="absolute top-0 left-0 h-full bg-white/40 rounded-full" />
+                                    <TimeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-10" />
                                 </TimeSlider.Track>
                                 <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity" />
                                 {/* Add thumbnails prop if VTT is available */}
@@ -290,7 +302,7 @@ function QualityController() {
 }
 
 function SpeedController() {
-    const options = usePlaybackRateOptions()
+    const options = usePlaybackRateOptions({ rates: [0.5, 1, 1.5, 2] })
     const currentRate = options.selectedValue
     const [isHovering, setIsHovering] = useState(false)
 
