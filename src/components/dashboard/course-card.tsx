@@ -22,10 +22,10 @@ interface CourseCardProps {
 
 export function CourseCard({ course }: CourseCardProps) {
     return (
-        <Card className="group hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-border/50 overflow-hidden flex flex-col h-full bg-card cursor-pointer">
+        <Card className="group hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-gray-200 dark:border-gray-800 overflow-hidden flex flex-col h-full bg-card cursor-pointer">
             {/* Full Width Thumbnail with Padding and Border */}
             <div className="p-3 pb-0">
-                <div className="relative w-full aspect-video overflow-hidden rounded-xl border border-border/50 bg-muted shadow-sm">
+                <div className="relative w-full aspect-video overflow-hidden rounded-xl border border-white/5 bg-muted shadow-sm">
                     {course.thumbnail_url ? (
                         <Image
                             src={course.thumbnail_url}
@@ -44,7 +44,7 @@ export function CourseCard({ course }: CourseCardProps) {
 
                     {/* Play Button on Hover */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 scale-90 group-hover:scale-100">
-                        <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-lg">
+                        <div className="w-12 h-12 rounded-full bg-black/50 border border-white/10 flex items-center justify-center shadow-lg">
                             <Play className="w-6 h-6 text-white fill-white ml-0.5" />
                         </div>
                     </div>
@@ -52,7 +52,7 @@ export function CourseCard({ course }: CourseCardProps) {
             </div>
 
             {/* Content */}
-            <div className="p-4 flex flex-col gap-3 border-b border-border/50">
+            <div className="p-4 flex flex-col gap-3 border-b border-white/5">
                 <h3 className="font-bold text-lg leading-tight line-clamp-2 group-hover:text-primary transition-colors">
                     {course.title}
                 </h3>
