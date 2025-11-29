@@ -6,21 +6,26 @@ import { revalidatePath } from 'next/cache'
 export async function getLessonComments(lessonId: string) {
     const supabase = await createClient()
 
-    const { data: comments, error } = await supabase
-        .from('comments')
-        .select(`
-            *,
-            profiles(full_name, avatar_url, role)
-        `)
-        .eq('lesson_id', lessonId)
-        .order('created_at', { ascending: false })
+    try {
+        const { data: comments, error } = await supabase
+            .from('comments')
+            .select(`
+                *,
+                profiles(full_name, avatar_url, role)
+            `)
+            .eq('lesson_id', lessonId)
+            .order('created_at', { ascending: false })
 
-    if (error) {
-        console.error('Error fetching comments:', error)
+        if (error) {
+            console.error('Error fetching comments:', error)
+            return []
+        }
+
+        return comments
+    } catch (err) {
+        console.error('Unexpected error fetching comments:', err)
         return []
     }
-
-    return comments
 }
 
 export async function addComment(lessonId: string, content: string, timestamp?: number, parentId?: string) {
