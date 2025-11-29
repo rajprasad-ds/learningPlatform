@@ -8,15 +8,11 @@ import {
     Controls,
     TimeSlider,
     VolumeSlider,
-    Gesture,
     useMediaState,
     useMediaRemote,
     useVideoQualityOptions,
     usePlaybackRateOptions,
-    type MediaPlayerInstance,
-    type VideoQuality,
-    type PlaybackRateOption,
-    type TextTrack
+    type MediaPlayerInstance
 } from '@vidstack/react'
 import {
     Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -53,44 +49,52 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     onProgress,
     onComplete,
 }, ref) => {
-    const playerRef = useRef<MediaPlayerInstance>(null)
-    const containerRef = useRef<HTMLDivElement>(null)
+    const playerRef = useRef<MediaPlayerInstance | null>(null)
+    const containerRef = useRef<HTMLDivElement | null>(null)
     const remote = useMediaRemote(playerRef)
     const duration = useMediaState('duration', playerRef)
-    const textTracks = useMediaState('textTracks', playerRef) // Reactive text tracks
-    const isPaused = useMediaState('paused', playerRef) // Reactive paused state
+    const textTracks = useMediaState('textTracks', playerRef)
 
     // Hover-scrub state & refs
-    const hoverRef = useRef<{ originalTime: number, wasPlaying: boolean, isHovering: boolean }>({
+    const hoverRef = useRef<{
+        originalTime: number,
+        wasPlaying: boolean,
+        isHovering: boolean
+    }>({
         originalTime: 0,
         wasPlaying: false,
         isHovering: false
     })
     const [hoverTime, setHoverTime] = useState<number | null>(null)
     const [hoverPct, setHoverPct] = useState<number>(0) // 0-100
-    const [hoverChapterLabel, setHoverChapterLabel] = useState<string | null>(null)
     const [chaptersCues, setChaptersCues] = useState<any[]>([])
 
-    // Prevent emitting progress while hover-scrubbing
+    // throttle/RAF handle
+    const rafRef = useRef<number | null>(null)
+
+    // prevent emitting progress while hover-scrubbing
     const isHovering = useRef(false)
 
+    // ----------------------
+    // Imperative API
+    // ----------------------
     useImperativeHandle(ref, () => ({
         seekTo: (time: number) => {
             if (playerRef.current) {
                 playerRef.current.currentTime = time
-                // Optional: Auto-play if paused
                 remote.play()
             }
         }
     }))
 
-    // Parse chapters from text tracks
+    // ----------------------
+    // Parse chapters from text tracks (VTT)
+    // ----------------------
     useEffect(() => {
         if (!textTracks) return
 
-        const chaptersTrack = textTracks.find(t => t.kind === 'chapters')
+        const chaptersTrack = textTracks.find((t: any) => t.kind === 'chapters')
         if (chaptersTrack) {
-            // We need to wait for cues to be loaded if they aren't already
             const updateCues = () => {
                 const loadedCues = Array.from(chaptersTrack.cues || []).map((c: any) => ({
                     startTime: c.startTime,
@@ -98,7 +102,6 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                     text: c.text
                 }))
 
-                // If endTime isn't present in cues (some sources), compute from next cue
                 const withEnds = loadedCues.map((c, idx) => ({
                     ...c,
                     endTime: c.endTime ?? (loadedCues[idx + 1]?.startTime ?? duration ?? 0)
@@ -106,49 +109,64 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                 setChaptersCues(withEnds)
             }
 
-            // If cues are already loaded
             if (chaptersTrack.cues && chaptersTrack.cues.length > 0) {
                 updateCues()
             }
 
-            // Listen for cue changes (when they load)
             chaptersTrack.addEventListener('cue-change', updateCues)
-
             return () => {
                 chaptersTrack.removeEventListener('cue-change', updateCues)
             }
         }
     }, [textTracks, duration, chaptersUrl])
 
-
-    // Handle progress updates
+    // ----------------------
+    // onTimeUpdate -> forward to parent but suppress progress emit during hover scrubs
+    // ----------------------
     const onTimeUpdate = (detail: any) => {
         const time = detail.currentTime
-        const duration = detail.duration
+        const dur = detail.duration
 
-        // Call time update prop (seconds)
-        if (onTimeUpdateProp) {
-            onTimeUpdateProp(time)
-        }
+        if (onTimeUpdateProp) onTimeUpdateProp(time)
 
-        // Call progress prop (percentage) - ONLY if not hovering
-        if (onProgress && time && duration && !isHovering.current) {
-            const progress = (time / duration) * 100
-            if (Number.isFinite(progress)) {
-                onProgress(progress)
-            }
+        if (onProgress && time && dur && !isHovering.current) {
+            const progress = (time / dur) * 100
+            if (Number.isFinite(progress)) onProgress(progress)
         }
     }
 
-    // Handle completion
     const onEnded = () => {
         onComplete?.()
     }
 
+    // ----------------------
+    // Handlers for container clicks (toggle play/pause) and double-click fullscreen
+    // We implement container clicks rather than vidstack Gesture toggle to avoid conflicts.
+    // ----------------------
+    const handleContainerClick = (e: React.MouseEvent) => {
+        // click on container toggles play/pause, but avoid when interacting with slider (slider stops propagation)
+        if (!playerRef.current) return
+        if (playerRef.current.paused) remote.play(e.nativeEvent)
+        else remote.pause(e.nativeEvent)
+    }
+
+    const handleContainerDoubleClick = () => {
+        // Toggle fullscreen via remote
+        if (!playerRef.current) return
+        const fs = (playerRef.current as any).fullscreen
+        if (fs) remote.exitFullscreen()
+        else remote.enterFullscreen()
+    }
+
+    // ----------------------
+    // Render
+    // ----------------------
     return (
         <div
             ref={containerRef}
             className="relative w-full aspect-video bg-black rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/10 group select-none"
+            onClick={handleContainerClick}
+            onDoubleClick={handleContainerDoubleClick}
         >
             <MediaPlayer
                 src={videoUrl}
@@ -175,18 +193,7 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                     )}
                 </MediaProvider>
 
-                <Gesture
-                    className="absolute inset-0 z-0 block h-full w-full"
-                    event="pointerup"
-                    action="toggle:paused"
-                />
-                <Gesture
-                    className="absolute inset-0 z-0 block h-full w-full"
-                    event="dblpointerup"
-                    action="toggle:fullscreen"
-                />
-
-                {/* Custom Watermark Overlay */}
+                {/* Watermark */}
                 <div className="absolute inset-0 pointer-events-none z-[50] overflow-hidden">
                     <DynamicWatermark
                         userEmail={userEmail}
@@ -196,37 +203,48 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                     />
                 </div>
 
-                {/* Custom Controls Layout */}
-                <Controls.Root className="absolute inset-0 z-[60] flex flex-col justify-between opacity-0 transition-opacity duration-300 data-[visible]:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent">
+                {/* Controls */}
+                <Controls.Root className="absolute inset-0 z-[60] flex flex-col justify-between opacity-0 transition-opacity duration-300 data-[visible]:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none">
 
-                    {/* Top Group (Optional: Title or Back button could go here) */}
-                    <Controls.Group className="w-full p-4">
-                    </Controls.Group>
+                    <Controls.Group className="w-full p-4 pointer-events-auto"></Controls.Group>
 
-                    {/* Center Group (Play/Pause Overlay) */}
+                    {/* Center Play Overlay (pointer-events-none so clicks pass through to container) */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <PlayPauseOverlay />
                     </div>
 
-                    {/* Bottom Group (Main Controls) */}
-                    <Controls.Group className="w-full px-4 pb-2 mt-auto">
+                    <Controls.Group className="w-full px-4 pb-2 mt-auto pointer-events-auto">
                         <div className="flex flex-col w-full">
 
+                            {/* -----------------------
+                  TIME SLIDER (hover scrub)
+                 ----------------------- */}
                             <TimeSlider.Root
                                 className="relative w-full h-8 group/slider flex items-center cursor-pointer select-none touch-none"
-                                onPointerEnter={(e: any) => {
-                                    // Begin hover scrubbing session
-                                    if (!playerRef.current) return
-                                    hoverRef.current.originalTime = playerRef.current.currentTime ?? 0
-                                    // FIX: Use the captured isPaused state or read from player directly if needed.
-                                    hoverRef.current.wasPlaying = !playerRef.current.paused
-
-                                    hoverRef.current.isHovering = true
-                                    isHovering.current = true
-                                    // pause to update frames on set currentTime
-                                    remote.pause()
+                                // NOTE: slider events must stop propagation so container click doesn't toggle play on timeline interactions
+                                onPointerEnter={() => {
+                                    // no-op; we start session on first pointer move to avoid accidental pausing
                                 }}
                                 onPointerMove={(e: any) => {
+                                    if (!playerRef.current) return
+
+                                    // Start session if not active
+                                    if (!hoverRef.current.isHovering) {
+                                        hoverRef.current.originalTime = playerRef.current.currentTime ?? 0
+
+                                        // robustly determine wasPlaying (true if not paused)
+                                        const isPlaying = !playerRef.current.paused
+                                        hoverRef.current.wasPlaying = isPlaying
+                                        hoverRef.current.isHovering = true
+                                        isHovering.current = true
+
+                                        // IMPORTANT: do NOT call remote.pause(...) here if avoidable.
+                                        // We may pause if you prefer, but pausing can produce "programmatic pause" states.
+                                        // To emulate YouTube, we will NOT call remote.pause() — we will set currentTime and rely on the browser
+                                        // to show frames. However some platforms benefit from a short pause; if necessary use:
+                                        // remote.pause()
+                                    }
+
                                     // compute hoverTime from pointer position
                                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
                                     const x = e.clientX - rect.left
@@ -237,53 +255,76 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                                     const time = pct * duration
                                     setHoverTime(time)
 
-                                    // set player time to show the frame (do not emit progress while hovering)
-                                    if (playerRef.current) playerRef.current.currentTime = time
-
-                                    // compute current chapter label if any
-                                    const cue = chaptersCues.find(c => time >= c.startTime && time < c.endTime)
-                                    setHoverChapterLabel(cue ? cue.text : null)
+                                    // Use RAF for smooth updates
+                                    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+                                    rafRef.current = requestAnimationFrame(() => {
+                                        if (playerRef.current) {
+                                            // update currentTime to show frame at hover pos
+                                            playerRef.current.currentTime = time
+                                        }
+                                    })
                                 }}
                                 onPointerLeave={() => {
-                                    // end hover scrub session, restore original time if not committed
+                                    // If we never started a hover session, nothing to do
+                                    if (!hoverRef.current.isHovering) return
+                                    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+
+                                    // End hover session
+                                    const wasPlaying = hoverRef.current.wasPlaying
                                     hoverRef.current.isHovering = false
                                     isHovering.current = false
                                     setHoverTime(null)
-                                    setHoverChapterLabel(null)
 
-                                    // restore original playback position and play state
+                                    // Restore original time and then restore play/pause state deterministically
                                     if (playerRef.current) {
                                         playerRef.current.currentTime = hoverRef.current.originalTime ?? playerRef.current.currentTime
-                                        if (hoverRef.current.wasPlaying) remote.play()
+
+                                        // Restore playing state deterministically using remote API with playerRef
+                                        // if wasPlaying -> play, else -> pause
+                                        setTimeout(() => {
+                                            if (!playerRef.current) return
+                                            if (wasPlaying) remote.play()
+                                            else remote.pause()
+                                        }, 25)
                                     }
                                 }}
                                 onClick={(e: any) => {
-                                    // commit the hover time as the new playback position
+                                    // stop propagation so container click doesn't toggle play
+                                    e.stopPropagation()
+
+                                    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+
                                     if (hoverTime != null && playerRef.current) {
+                                        const wasPlaying = hoverRef.current.wasPlaying
+
+                                        // commit the hover time as the new playback position
                                         playerRef.current.currentTime = hoverTime
-                                        remote.play()
-                                        // also clear hover state
+
+                                        // end hover state
                                         hoverRef.current.isHovering = false
-                                        setHoverTime(null)
-                                        setHoverChapterLabel(null)
                                         isHovering.current = false
+                                        setHoverTime(null)
+
+                                        // Restore play/pause state deterministically
+                                        setTimeout(() => {
+                                            if (!playerRef.current) return
+                                            if (wasPlaying) remote.play()
+                                            else remote.pause()
+                                        }, 25)
                                     }
                                 }}
                             >
-                                {/* Background track and buffer/progress as before */}
                                 <TimeSlider.Track className="relative w-full h-[3px] bg-white/20 rounded-full group-hover/slider:h-[5px] transition-all duration-200">
                                     <TimeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-20 w-[var(--slider-fill)] will-change-[width]" />
                                     <TimeSlider.Progress className="absolute top-0 left-0 h-full bg-white/50 rounded-full z-10 w-[var(--slider-progress)] will-change-[width]" />
 
-                                    {/* CHAPTER SEGMENTS: draw duration-based colored blocks */}
                                     {chaptersCues.map((c, idx) => {
                                         const left = ((c.startTime / duration) * 100) || 0
-                                        const width = (((c.endTime - c.startTime) / duration) * 100) || 0.5 // min width
-                                        // Use separators instead of alternating colors for cleaner look
+                                        const width = (((c.endTime - c.startTime) / duration) * 100) || 0.5
                                         return (
                                             <div
                                                 key={c.startTime}
-                                                className="absolute top-0 h-full z-30 border-r-2 border-black/20 pointer-events-none"
+                                                className="absolute top-0 h-full z-30 bg-black w-[2px] pointer-events-none"
                                                 style={{ left: `${left + width}%` }}
                                             />
                                         )
@@ -292,15 +333,14 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                                     <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-purple-600 rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-all duration-200 z-40 left-[var(--slider-fill)] will-change-[left] group-hover/slider:w-4 group-hover/slider:h-4" />
                                 </TimeSlider.Track>
 
-                                {/* Hover label box (time + chapter) - shown only during pointer hover */}
+                                {/* Hover label box (time only) */}
                                 {hoverTime != null && (
                                     <div
                                         className="absolute -top-12 transform -translate-x-1/2 z-50 pointer-events-none"
                                         style={{ left: `${hoverPct}%` }}
                                     >
-                                        <div className="bg-black/90 text-white text-xs px-2 py-1.5 rounded-md shadow-lg border border-white/10 flex flex-col items-center min-w-[60px] whitespace-nowrap">
+                                        <div className="bg-black/90 text-white text-xs px-2 py-1.5 rounded-md shadow-lg border border-white/10 flex flex-col items-center min-w-[40px] whitespace-nowrap">
                                             <div className="font-bold font-mono">
-                                                {/* format time */}
                                                 {(() => {
                                                     const s = Math.floor(hoverTime)
                                                     const mins = Math.floor(s / 60)
@@ -308,18 +348,17 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                                                     return `${mins}:${secs.toString().padStart(2, '0')}`
                                                 })()}
                                             </div>
-                                            {hoverChapterLabel && <div className="text-[10px] text-white/80 mt-0.5 max-w-[200px] truncate">{hoverChapterLabel}</div>}
                                         </div>
                                     </div>
                                 )}
                             </TimeSlider.Root>
 
+                            {/* Controls row */}
                             <div className="flex items-center justify-between mt-1">
-                                {/* Left Controls */}
                                 <div className="flex items-center gap-2">
-                                    <PlayPauseButton />
+                                    <PlayPauseButton playerRef={playerRef} />
                                     <div className="flex items-center gap-2 group/volume">
-                                        <VolumeButton />
+                                        <VolumeButton playerRef={playerRef} />
                                         <VolumeSlider.Root className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 relative h-5 flex items-center">
                                             <VolumeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden">
                                                 <VolumeSlider.TrackFill className="absolute top-0 left-0 h-full bg-white rounded-full" />
@@ -330,7 +369,10 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                                     <TimeDisplay />
                                 </div>
 
-                                {/* Right Controls */}
+                                <div className="flex-1 flex justify-center px-4 overflow-hidden">
+                                    <CurrentChapterDisplay chaptersCues={chaptersCues} />
+                                </div>
+
                                 <div className="flex items-center gap-2">
                                     <QualityController />
                                     <SpeedController />
@@ -341,14 +383,56 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                         </div>
                     </Controls.Group>
                 </Controls.Root>
-            </MediaPlayer >
-        </div >
+            </MediaPlayer>
+        </div>
     )
 })
 
 ProtectedVideoPlayer.displayName = 'ProtectedVideoPlayer'
 
-// --- Sub-Components ---
+// ----------------------
+// Subcomponents
+// ----------------------
+
+function CurrentChapterDisplay({ chaptersCues }: { chaptersCues: any[] }) {
+    const currentTime = useMediaState('currentTime')
+    const [showFullTitle, setShowFullTitle] = useState(false)
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+    const currentChapter = chaptersCues.find(c => currentTime >= c.startTime && currentTime < c.endTime)
+
+    if (!currentChapter) return null
+
+    const handleChapterClick = () => {
+        setShowFullTitle(true)
+        if (timeoutRef.current) clearTimeout(timeoutRef.current)
+        timeoutRef.current = setTimeout(() => {
+            setShowFullTitle(false)
+        }, 3000)
+    }
+
+    return (
+        <div className="relative flex items-center justify-center max-w-[200px] sm:max-w-[300px]">
+            <button
+                onClick={handleChapterClick}
+                className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/5 backdrop-blur-sm transition-colors cursor-pointer max-w-full"
+            >
+                <span className="text-[10px] sm:text-xs font-medium text-white/90 truncate">
+                    {currentChapter.text}
+                </span>
+            </button>
+
+            {showFullTitle && (
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 animate-in fade-in zoom-in duration-200">
+                    <div className="bg-black/90 text-white text-xs px-3 py-2 rounded-lg shadow-xl border border-white/10 whitespace-nowrap max-w-[80vw] truncate">
+                        {currentChapter.text}
+                    </div>
+                    <div className="w-2 h-2 bg-black/90 border-r border-b border-white/10 transform rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2"></div>
+                </div>
+            )}
+        </div>
+    )
+}
 
 function PlayPauseOverlay() {
     const isPaused = useMediaState('paused')
@@ -363,13 +447,18 @@ function PlayPauseOverlay() {
     )
 }
 
-function PlayPauseButton() {
-    const isPaused = useMediaState('paused')
-    const remote = useMediaRemote()
+function PlayPauseButton({ playerRef }: { playerRef?: React.RefObject<MediaPlayerInstance | null> }) {
+    const isPaused = useMediaState('paused', playerRef)
+    const remote = useMediaRemote(playerRef)
 
     return (
         <button
-            onClick={() => isPaused ? remote.play() : remote.pause()}
+            onClick={(e) => {
+                e.stopPropagation()
+                if (!playerRef?.current) return
+                if (playerRef.current.paused) remote.play(e.nativeEvent)
+                else remote.pause(e.nativeEvent)
+            }}
             className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
         >
             {isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5 fill-current" />}
@@ -377,14 +466,19 @@ function PlayPauseButton() {
     )
 }
 
-function VolumeButton() {
-    const volume = useMediaState('volume')
-    const isMuted = useMediaState('muted')
-    const remote = useMediaRemote()
+function VolumeButton({ playerRef }: { playerRef?: React.RefObject<MediaPlayerInstance | null> }) {
+    const volume = useMediaState('volume', playerRef)
+    const isMuted = useMediaState('muted', playerRef)
+    const remote = useMediaRemote(playerRef)
 
     return (
         <button
-            onClick={() => isMuted ? remote.unmute() : remote.mute()}
+            onClick={(e) => {
+                e.stopPropagation()
+                if (!playerRef?.current) return
+                if (isMuted) remote.unmute(e.nativeEvent)
+                else remote.mute(e.nativeEvent)
+            }}
             className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
         >
             {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -423,10 +517,10 @@ function QualityController() {
             onMouseLeave={() => setIsHovering(false)}
         >
             <div className={`
-                flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 border border-white/5 
-                backdrop-blur-sm transition-all duration-300 cursor-pointer overflow-hidden
-                ${isHovering ? 'w-auto bg-black/80' : 'w-16 hover:bg-white/20'}
-            `}>
+        flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 border border-white/5 
+        backdrop-blur-sm transition-all duration-300 cursor-pointer overflow-hidden
+        ${isHovering ? 'w-auto bg-black/80' : 'w-16 hover:bg-white/20'}
+      `}>
                 <Settings className="w-3 h-3 text-white/80 flex-shrink-0" />
 
                 {isHovering ? (
@@ -436,16 +530,15 @@ function QualityController() {
                                 key={option.value}
                                 onClick={(e) => {
                                     e.stopPropagation()
-                                    // Pass the event to select() to ensure context if needed
                                     option.select(e.nativeEvent)
                                 }}
                                 className={`
-                                    text-xs font-bold px-1.5 py-0.5 rounded transition-colors whitespace-nowrap
-                                    ${option.selected
+                  text-xs font-bold px-1.5 py-0.5 rounded transition-colors whitespace-nowrap
+                  ${option.selected
                                         ? 'text-purple-400 bg-purple-500/10'
                                         : 'text-white/60 hover:text-white'
                                     }
-                                `}
+                `}
                             >
                                 {option.label}
                             </button>
@@ -473,10 +566,10 @@ function SpeedController() {
             onMouseLeave={() => setIsHovering(false)}
         >
             <div className={`
-                flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 border border-white/5 
-                backdrop-blur-sm transition-all duration-300 cursor-pointer overflow-hidden
-                ${isHovering ? 'w-48 bg-black/80' : 'w-16 hover:bg-white/20'}
-            `}>
+        flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 border border-white/5 
+        backdrop-blur-sm transition-all duration-300 cursor-pointer overflow-hidden
+        ${isHovering ? 'w-auto bg-black/80' : 'w-16 hover:bg-white/20'}
+      `}>
                 <FastForward className="w-3 h-3 text-white/80 flex-shrink-0" />
 
                 {isHovering ? (
@@ -489,12 +582,12 @@ function SpeedController() {
                                     rate.select(e.nativeEvent)
                                 }}
                                 className={`
-                                    text-xs font-bold px-1.5 py-0.5 rounded transition-colors
-                                    ${currentRate === rate.value
+                  text-xs font-bold px-1.5 py-0.5 rounded transition-colors
+                  ${currentRate === rate.value
                                         ? 'text-purple-400 bg-purple-500/10'
                                         : 'text-white/60 hover:text-white'
                                     }
-                                `}
+                `}
                             >
                                 {rate.label}
                             </button>
@@ -530,7 +623,7 @@ function ScreenshotButton({ containerRef }: { containerRef: React.RefObject<HTML
 
     return (
         <button
-            onClick={handleScreenshot}
+            onClick={(e) => { e.stopPropagation(); handleScreenshot() }}
             className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors group/shot relative"
             title="Take Screenshot"
         >
@@ -548,7 +641,11 @@ function FullscreenButton() {
 
     return (
         <button
-            onClick={() => isFullscreen ? remote.exitFullscreen() : remote.enterFullscreen()}
+            onClick={(e) => {
+                e.stopPropagation()
+                if (isFullscreen) remote.exitFullscreen()
+                else remote.enterFullscreen()
+            }}
             className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
         >
             {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
