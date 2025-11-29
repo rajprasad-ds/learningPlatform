@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createVideoEntry, updateLessonVideo, saveLessonChapters } from '@/actions/video-actions'
-import { Upload, CheckCircle, AlertTriangle, X, Save } from 'lucide-react'
+import { Upload, CheckCircle, AlertTriangle, X, Save, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface VideoUploaderProps {
@@ -25,6 +25,7 @@ export function VideoUploader({
     onUploadComplete
 }: VideoUploaderProps) {
     const [isUploading, setIsUploading] = useState(false)
+    const [isSavingChapters, setIsSavingChapters] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(0)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
@@ -61,6 +62,7 @@ export function VideoUploader({
     }
 
     const handleSaveChapters = async () => {
+        setIsSavingChapters(true)
         try {
             await saveLessonChapters(lessonId, chapters)
             setSuccess(true)
@@ -69,6 +71,8 @@ export function VideoUploader({
         } catch (err) {
             console.error('Failed to save chapters:', err)
             setError('Failed to save chapters')
+        } finally {
+            setIsSavingChapters(false)
         }
     }
 
@@ -199,10 +203,20 @@ export function VideoUploader({
                     <div className="flex justify-end">
                         <button
                             onClick={handleSaveChapters}
-                            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                            disabled={isSavingChapters}
+                            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Save className="w-4 h-4" />
-                            Save Chapters
+                            {isSavingChapters ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="w-4 h-4" />
+                                    Save Chapters
+                                </>
+                            )}
                         </button>
                     </div>
                 )}
