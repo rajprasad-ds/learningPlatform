@@ -160,6 +160,7 @@ export function ProtectedVideoPlayer({
 
                                 <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30 ring-2 ring-purple-500 left-[var(--slider-fill)] will-change-[left]" />
                             </TimeSlider.Root>
+
                             <div className="flex items-center justify-between">
                                 {/* Left Controls */}
                                 <div className="flex items-center gap-4">
@@ -180,8 +181,8 @@ export function ProtectedVideoPlayer({
                         </div>
                     </Controls.Group>
                 </Controls.Root>
-            </MediaPlayer>
-        </div>
+            </MediaPlayer >
+        </div >
     )
 }
 
