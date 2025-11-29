@@ -76,7 +76,7 @@ export function LessonContent({
 
     const handleTimestampClick = (time: number) => {
         if (playerRef.current) {
-            playerRef.current.seekTo(time)
+            playerRef.current.seekTo(time, true)
         }
     }
 

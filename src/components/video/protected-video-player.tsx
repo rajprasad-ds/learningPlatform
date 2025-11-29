@@ -35,7 +35,7 @@ interface ProtectedVideoPlayerProps {
 }
 
 export interface ProtectedVideoPlayerRef {
-    seekTo: (time: number) => void
+    seekTo: (time: number, shouldPause?: boolean) => void
 }
 
 export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, ProtectedVideoPlayerProps>(({
@@ -79,10 +79,14 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     // Imperative API
     // ----------------------
     useImperativeHandle(ref, () => ({
-        seekTo: (time: number) => {
+        seekTo: (time: number, shouldPause: boolean = false) => {
             if (playerRef.current) {
                 playerRef.current.currentTime = time
-                remote.play()
+                if (shouldPause) {
+                    remote.pause()
+                } else {
+                    remote.play()
+                }
             }
         }
     }))
