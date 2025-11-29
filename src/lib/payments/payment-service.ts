@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { razorpay } from '@/lib/razorpay'
 
 export class PaymentService {
     /**
@@ -6,35 +7,29 @@ export class PaymentService {
      * In a real application, this would interact with Stripe/PayPal API.
      * For now, it simulates a successful payment and records it in the database.
      */
-    static async processPayment(userId: string, courseId: string, amount: number) {
-        const supabase = await createClient()
+    static async createOrder(
+        courseId: string,
+        amount: number,
+        currency: string = 'INR'
+    ) {
+        const options = {
+            amount: Math.round(amount * 100), // amount in smallest currency unit
+            currency: currency,
+            receipt: `rcpt_${courseId.slice(0, 8)}_${Date.now()}`.slice(0, 40), // Ensure max 40 chars
+            notes: {
+                courseId: courseId
+            }
+        };
 
-        // 1. Simulate payment processing delay
-        await new Promise(resolve => setTimeout(resolve, 1000))
-
-        // 2. Record payment in database
-        const { data: payment, error } = await supabase
-            .from('payments')
-            .insert({
-                user_id: userId,
-                course_id: courseId,
-                amount: amount,
-                status: 'completed',
-                provider_id: `sim_${Date.now()}`, // Simulated provider ID
-                metadata: {
-                    source: 'simulation',
-                    timestamp: new Date().toISOString()
-                }
-            })
-            .select()
-            .single()
-
-        if (error) {
-            console.error('Payment recording failed:', error)
-            throw new Error('Payment failed')
+        console.log('Creating Razorpay order with options:', options)
+        try {
+            const order = await razorpay.orders.create(options);
+            console.log('Razorpay order created:', order)
+            return order;
+        } catch (error) {
+            console.error('Razorpay order creation failed:', error)
+            throw error
         }
-
-        return payment
     }
 
     /**

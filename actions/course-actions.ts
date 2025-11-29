@@ -154,17 +154,14 @@ export async function purchaseCourse(courseId: string) {
     // 1. Get course details
     const { data: course } = await supabase
         .from('courses')
-        .select('price')
+        .select('price, title, description')
         .eq('id', courseId)
         .single()
 
     if (!course) throw new Error('Course not found')
 
-    try {
-        // 2. Process Payment
-        await PaymentService.processPayment(user.id, courseId, Number(course.price))
-
-        // 3. Create Enrollment
+    // Handle free courses
+    if (!course.price || course.price === 0) {
         const { error: enrollmentError } = await supabase
             .from('enrollments')
             .insert({
@@ -173,15 +170,43 @@ export async function purchaseCourse(courseId: string) {
             })
 
         if (enrollmentError) {
-            // In a real system, we might want to refund here if enrollment fails
-            console.error('Enrollment failed after payment:', enrollmentError)
+            console.error('Enrollment failed:', enrollmentError)
             throw new Error('Enrollment failed')
         }
 
-        revalidatePath(`/courses/${courseId}`)
         return { success: true }
+    }
+
+    try {
+        // 2. Create Razorpay Order
+        const order = await PaymentService.createOrder(
+            courseId,
+            Number(course.price)
+        )
+
+        return {
+            success: true,
+            orderId: order.id,
+            amount: order.amount,
+            currency: order.currency,
+            key: process.env.RAZORPAY_KEY_ID, // Pass key to client
+            user: {
+                id: user.id,
+                name: user.user_metadata?.full_name || 'User',
+                email: user.email,
+                contact: user.phone || ''
+            },
+            course: {
+                name: course.title,
+                description: course.description
+            }
+        }
     } catch (error) {
         console.error('Purchase failed:', error)
+        if (error instanceof Error) {
+            console.error('Error message:', error.message)
+            console.error('Error stack:', error.stack)
+        }
         return { success: false, error: 'Purchase failed' }
     }
 }
