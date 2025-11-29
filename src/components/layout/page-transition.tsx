@@ -18,7 +18,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
                 animate={{
                     opacity: 1,
                     filter: 'blur(0px)',
-                    clipPath: 'circle(150% at 0% 0%)'
+                    clipPath: 'circle(300% at 0% 0%)'
                 }}
                 exit={{
                     opacity: 0,

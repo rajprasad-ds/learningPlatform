@@ -275,30 +275,43 @@ export async function getEnrolledCourses() {
 
                 // Get all lessons for this course (through modules)
                 let totalLessons = 0
-                let lessonIds: string[] = []
+                let allLessons: any[] = []
 
                 if (moduleIds.length > 0) {
                     const { data: lessons } = await supabase
                         .from('lessons')
-                        .select('id')
+                        .select('id, title, position, module_id')
                         .in('module_id', moduleIds)
+                        .order('position', { ascending: true })
 
-                    lessonIds = lessons?.map(l => l.id) || []
-                    totalLessons = lessonIds.length
+                    allLessons = lessons || []
+                    totalLessons = allLessons.length
                 }
 
                 // Get completed lessons for this course
                 let completedLessons = 0
-                if (lessonIds.length > 0) {
-                    const { count } = await supabase
+                let completedLessonIds = new Set<string>()
+
+                if (allLessons.length > 0) {
+                    const { data: progressData } = await supabase
                         .from('lesson_progress')
-                        .select('id', { count: 'exact', head: true })
+                        .select('lesson_id')
                         .eq('user_id', user.id)
-                        .in('lesson_id', lessonIds)
+                        .in('lesson_id', allLessons.map(l => l.id))
                         .eq('completed', true)
 
-                    completedLessons = count || 0
+                    if (progressData) {
+                        completedLessons = progressData.length
+                        progressData.forEach(p => completedLessonIds.add(p.lesson_id))
+                    }
                 }
+
+                // Find the first unfinished lesson (Next Lesson)
+                // We need to sort lessons by module position then lesson position
+                // But simplified: we assume lessons returned are somewhat ordered or we rely on the find
+                // Ideally we should sort by module position then lesson position if we had module info attached
+                // For now, we'll just find the first one not in completed set
+                const nextLesson = allLessons.find(l => !completedLessonIds.has(l.id))
 
                 // Calculate progress percentage
                 const progress = totalLessons ? Math.round(completedLessons / totalLessons * 100) : 0
@@ -313,6 +326,11 @@ export async function getEnrolledCourses() {
                     progress,
                     totalLessons,
                     completedLessons,
+                    nextLesson: nextLesson ? {
+                        id: nextLesson.id,
+                        title: nextLesson.title,
+                        moduleId: nextLesson.module_id
+                    } : null
                 }
             })
         )
