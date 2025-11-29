@@ -15,8 +15,8 @@ import {
     type MediaPlayerInstance
 } from '@vidstack/react'
 import {
-    Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-    Settings, Camera, FastForward
+    Play, Pause, Volume2, VolumeX, RotateCcw, SkipForward, X,
+    Settings, Camera, FastForward, Maximize, Minimize
 } from 'lucide-react'
 import '@vidstack/react/player/styles/base.css'
 
@@ -34,6 +34,11 @@ interface ProtectedVideoPlayerProps {
     onProgress?: (progress: number, time: number) => void
     onComplete?: () => void
     initialTime?: number
+    nextLesson?: {
+        title: string
+        onPlay: () => void
+    }
+    onReplay?: () => void
 }
 
 export interface ProtectedVideoPlayerRef {
@@ -52,6 +57,8 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     onProgress,
     onComplete,
     initialTime = 0,
+    nextLesson,
+    onReplay
 }, ref) => {
     const playerRef = useRef<MediaPlayerInstance | null>(null)
     const containerRef = useRef<HTMLDivElement | null>(null)
@@ -73,6 +80,11 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     const [hoverPct, setHoverPct] = useState<number>(0) // 0-100
     const [chaptersCues, setChaptersCues] = useState<any[]>([])
 
+    // End Screen State
+    const [showEndScreen, setShowEndScreen] = useState(false)
+    const [autoNextTimer, setAutoNextTimer] = useState<number | null>(null)
+    const timerRef = useRef<NodeJS.Timeout | null>(null)
+
     // throttle/RAF handle
     const rafRef = useRef<number | null>(null)
 
@@ -91,6 +103,9 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                 } else {
                     remote.play()
                 }
+                // Hide end screen if seeking (e.g. via chapters)
+                setShowEndScreen(false)
+                if (timerRef.current) clearInterval(timerRef.current)
             }
         }
     }))
@@ -151,6 +166,12 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
         const onCanPlay = () => {
             if (playerRef.current && Math.abs(playerRef.current.currentTime - startTime) > 1) {
                 playerRef.current.currentTime = startTime
+
+                // If starting at the end (completed), show end screen immediately
+                // But only if duration is known and > 0
+                if (playerRef.current.duration > 0 && Math.abs(playerRef.current.duration - startTime) < 1) {
+                    setShowEndScreen(true)
+                }
             }
         }
 
@@ -196,6 +217,7 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
             window.removeEventListener('beforeunload', handleBeforeUnload)
             playerRef.current?.removeEventListener('can-play', onCanPlay)
             saveProgress() // Trigger save on component unmount (SPA navigation)
+            if (timerRef.current) clearInterval(timerRef.current)
         }
     }, [lessonId, initialTime])
 
@@ -234,9 +256,36 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
         }
     }
 
+    // Auto-next trigger effect
+    useEffect(() => {
+        if (autoNextTimer === 0 && nextLesson && showEndScreen) {
+            if (timerRef.current) clearInterval(timerRef.current)
+            nextLesson.onPlay()
+        }
+    }, [autoNextTimer, nextLesson, showEndScreen])
+
     const onEnded = () => {
         onComplete?.()
         localStorage.removeItem(`progress_${lessonId}`) // Clear local progress on completion
+
+        // Show End Screen
+        setShowEndScreen(true)
+
+        // Start Auto-Next Timer if next lesson exists
+        if (nextLesson) {
+            setAutoNextTimer(10)
+            if (timerRef.current) clearInterval(timerRef.current)
+
+            timerRef.current = setInterval(() => {
+                setAutoNextTimer(prev => {
+                    if (prev === null || prev <= 1) {
+                        clearInterval(timerRef.current!)
+                        return 0
+                    }
+                    return prev - 1
+                })
+            }, 1000)
+        }
     }
 
     // Sync on Pause/Seek (Event-based)
@@ -246,11 +295,23 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
         }
     }
 
+    const onPlay = () => {
+        // Hide end screen if user manually plays (e.g. after seeking back)
+        if (showEndScreen) {
+            setShowEndScreen(false)
+            if (timerRef.current) clearInterval(timerRef.current)
+            setAutoNextTimer(null)
+        }
+    }
+
     // ----------------------
     // Handlers for container clicks (toggle play/pause) and double-click fullscreen
     // We implement container clicks rather than vidstack Gesture toggle to avoid conflicts.
     // ----------------------
     const handleContainerClick = (e: React.MouseEvent) => {
+        // If end screen is visible, don't toggle play/pause on container click
+        if (showEndScreen) return
+
         // click on container toggles play/pause, but avoid when interacting with slider (slider stops propagation)
         if (!playerRef.current) return
         if (playerRef.current.paused) remote.play(e.nativeEvent)
@@ -263,6 +324,25 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
         const fs = (playerRef.current as any).fullscreen
         if (fs) remote.exitFullscreen()
         else remote.enterFullscreen()
+    }
+
+    const handleReplay = () => {
+        if (onReplay) onReplay()
+        else {
+            // Default replay behavior
+            if (playerRef.current) {
+                playerRef.current.currentTime = 0
+                remote.play()
+            }
+        }
+        setShowEndScreen(false)
+        if (timerRef.current) clearInterval(timerRef.current)
+        setAutoNextTimer(null)
+    }
+
+    const handleCancelAutoNext = () => {
+        if (timerRef.current) clearInterval(timerRef.current)
+        setAutoNextTimer(null)
     }
 
     // ----------------------
@@ -287,6 +367,7 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                 onTimeUpdate={onTimeUpdate}
                 onEnded={onEnded}
                 onPause={onPause}
+                onPlay={onPlay}
                 ref={playerRef}
             >
                 <MediaProvider>
@@ -310,6 +391,16 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                         ipAddress={ipAddress}
                     />
                 </div>
+
+                {/* End Screen Overlay */}
+                {showEndScreen && (
+                    <VideoEndScreen
+                        onReplay={handleReplay}
+                        nextLesson={nextLesson}
+                        autoNextTimer={autoNextTimer}
+                        onCancelAutoNext={handleCancelAutoNext}
+                    />
+                )}
 
                 {/* Controls */}
                 <Controls.Root className="absolute inset-0 z-[60] flex flex-col justify-between opacity-0 transition-opacity duration-300 data-[visible]:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none">
@@ -497,6 +588,109 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
 })
 
 ProtectedVideoPlayer.displayName = 'ProtectedVideoPlayer'
+
+// ----------------------
+// Subcomponents
+// ----------------------
+
+interface VideoEndScreenProps {
+    onReplay: () => void
+    nextLesson?: {
+        title: string
+        onPlay: () => void
+    }
+    autoNextTimer: number | null
+    onCancelAutoNext: () => void
+}
+
+function VideoEndScreen({ onReplay, nextLesson, autoNextTimer, onCancelAutoNext }: VideoEndScreenProps) {
+    return (
+        <div
+            className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300"
+            onClick={(e) => e.stopPropagation()} // Prevent clicks from toggling play/pause
+        >
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16 p-8 w-full max-w-4xl justify-center">
+
+                {/* Replay Option */}
+                <div className="flex flex-col items-center gap-4 group cursor-pointer" onClick={onReplay}>
+                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white/10 border border-white/20 flex items-center justify-center group-hover:bg-white/20 group-hover:scale-110 transition-all duration-300">
+                        <RotateCcw className="w-8 h-8 md:w-10 md:h-10 text-white" />
+                    </div>
+                    <span className="text-white font-medium text-sm md:text-base tracking-wide">Replay Lesson</span>
+                </div>
+
+                {/* Divider (only on desktop) */}
+                {nextLesson && (
+                    <div className="hidden md:block w-px h-32 bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
+                )}
+
+                {/* Next Lesson Option */}
+                {nextLesson && (
+                    <div className="flex flex-col items-center gap-4 max-w-xs text-center">
+                        <div className="relative group cursor-pointer" onClick={nextLesson.onPlay}>
+                            {/* Thumbnail Placeholder / Play Button */}
+                            <div className="w-48 h-28 md:w-64 md:h-36 bg-zinc-800 rounded-lg border border-white/10 flex items-center justify-center overflow-hidden relative group-hover:border-purple-500/50 transition-colors">
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                                <Play className="w-10 h-10 text-white fill-white opacity-80 group-hover:scale-110 transition-transform" />
+
+                                {/* Countdown Ring */}
+                                {autoNextTimer !== null && (
+                                    <div className="absolute top-2 right-2 flex items-center justify-center w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/20">
+                                        <span className="text-xs font-bold text-white">{autoNextTimer}</span>
+                                        <svg className="absolute inset-0 w-full h-full -rotate-90">
+                                            <circle
+                                                cx="16"
+                                                cy="16"
+                                                r="14"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                fill="transparent"
+                                                className="text-transparent"
+                                            />
+                                            <circle
+                                                cx="16"
+                                                cy="16"
+                                                r="14"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                fill="transparent"
+                                                strokeDasharray={2 * Math.PI * 14}
+                                                strokeDashoffset={2 * Math.PI * 14 * (1 - autoNextTimer / 10)}
+                                                className="text-purple-500 transition-all duration-1000 ease-linear"
+                                            />
+                                        </svg>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                            <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Up Next</span>
+                            <h3 className="text-white font-bold text-lg leading-tight line-clamp-2">{nextLesson.title}</h3>
+                        </div>
+
+                        {/* Auto-play controls */}
+                        {autoNextTimer !== null ? (
+                            <button
+                                onClick={onCancelAutoNext}
+                                className="mt-2 text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors"
+                            >
+                                <X className="w-3 h-3" /> Cancel Autoplay
+                            </button>
+                        ) : (
+                            <button
+                                onClick={nextLesson.onPlay}
+                                className="mt-2 px-6 py-2 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition-colors text-sm flex items-center gap-2"
+                            >
+                                <SkipForward className="w-4 h-4 fill-current" /> Play Now
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
 
 // ----------------------
 // Subcomponents

@@ -160,20 +160,7 @@ export function LessonContent({
         try {
             await markLessonComplete(lessonId)
             setCurrentProgress(100) // Force 100% on complete
-
-            // Auto-play next lesson
-            const currentIndex = allLessons.findIndex(l => l.id === lessonId)
-            if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
-                const nextLesson = allLessons[currentIndex + 1]
-
-                // Only auto-play if user has access
-                if (isEnrolled || nextLesson.is_free) {
-                    // Small delay for UX
-                    setTimeout(() => {
-                        router.push(`/courses/${courseId}/lessons/${nextLesson.id}`)
-                    }, 1500)
-                }
-            }
+            // Auto-redirect removed in favor of End Screen
         } catch (err) {
             console.error('Failed to mark complete:', err)
         }
@@ -181,6 +168,20 @@ export function LessonContent({
 
     const handleLessonClick = (targetLesson: Lesson) => {
         router.push(`/courses/${courseId}/lessons/${targetLesson.id}`)
+    }
+
+    // Calculate Next Lesson for End Screen
+    const currentIndex = allLessons.findIndex(l => l.id === lessonId)
+    let nextLessonProp = undefined
+
+    if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
+        const next = allLessons[currentIndex + 1]
+        if (isEnrolled || next.is_free) {
+            nextLessonProp = {
+                title: next.title,
+                onPlay: () => router.push(`/courses/${courseId}/lessons/${next.id}`)
+            }
+        }
     }
 
     return (
@@ -219,6 +220,12 @@ export function LessonContent({
                                     onProgress={handleProgress}
                                     onComplete={handleComplete}
                                     initialTime={userProgress?.last_watched_second || 0}
+                                    nextLesson={nextLessonProp}
+                                    onReplay={() => {
+                                        if (playerRef.current) {
+                                            playerRef.current.seekTo(0)
+                                        }
+                                    }}
                                 />
                             </div>
 
