@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, BarChart3, Settings, LogOut, BookOpen } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { GlobalVideoUploader } from '@/components/teacher/global-video-uploader'
 
 export default function TeacherLayout({
     children,
@@ -95,6 +96,8 @@ export default function TeacherLayout({
                     {children}
                 </div>
             </main>
+
+            <GlobalVideoUploader />
         </div>
     )
 }

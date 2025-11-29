@@ -3,7 +3,8 @@
 import { useState, useRef } from 'react'
 import { createVideoEntry, updateLessonVideo, saveLessonChapters } from '@/actions/video-actions'
 import { Upload, CheckCircle, AlertTriangle, X, Save, Loader2 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
+import { useUploadStore } from '@/stores/upload-store'
 
 interface VideoUploaderProps {
     lessonId: string
@@ -24,13 +25,16 @@ export function VideoUploader({
     initialChapters = [],
     onUploadComplete
 }: VideoUploaderProps) {
-    const [isUploading, setIsUploading] = useState(false)
+    const { startUpload, isUploading: isGlobalUploading, lessonId: uploadingLessonId, progress: globalProgress } = useUploadStore()
     const [isSavingChapters, setIsSavingChapters] = useState(false)
-    const [uploadProgress, setUploadProgress] = useState(0)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
+    const pathname = usePathname()
+
+    // Check if this specific uploader instance is the one currently uploading
+    const isThisUploading = isGlobalUploading && uploadingLessonId === lessonId
 
     const [chapters, setChapters] = useState<{ title: string, startTime: number }[]>(initialChapters)
     const [newChapterTitle, setNewChapterTitle] = useState('')
@@ -92,55 +96,26 @@ export function VideoUploader({
             return
         }
 
-        setIsUploading(true)
-        setUploadProgress(0)
         setError('')
         setSuccess(false)
 
         try {
-            // 1. Create Video Entry
-            const videoTitle = `${courseTitle} - ${moduleTitle} - ${lessonTitle}`
-            const { videoId, success: createSuccess } = await createVideoEntry(videoTitle)
-
-            if (!createSuccess || !videoId) {
-                throw new Error('Failed to initialize upload')
-            }
-
-            // 2. Upload File via XHR to track progress
-            await new Promise<void>((resolve, reject) => {
-                const xhr = new XMLHttpRequest()
-                xhr.open('PUT', `/api/upload?videoId=${videoId}`)
-
-                xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) {
-                        const percentComplete = (e.loaded / e.total) * 100
-                        setUploadProgress(Math.round(percentComplete))
-                    }
-                }
-
-                xhr.onload = async () => {
-                    if (xhr.status === 200) {
-                        // 3. Update Lesson Record with Video ID and Chapters
-                        await updateLessonVideo(lessonId, videoId, chapters)
-                        resolve()
-                    } else {
-                        reject(new Error('Upload failed'))
-                    }
-                }
-
-                xhr.onerror = () => reject(new Error('Network error'))
-                xhr.send(file)
+            await startUpload(file, {
+                lessonId,
+                lessonTitle,
+                courseTitle,
+                moduleTitle,
+                chapters,
+                originPath: pathname
             })
 
-            setSuccess(true)
+            // Show immediate feedback that background upload started
             if (onUploadComplete) onUploadComplete()
-            router.refresh()
 
         } catch (err) {
             console.error(err)
-            setError('Failed to upload video. Please try again.')
+            setError('Failed to start upload')
         } finally {
-            setIsUploading(false)
             if (fileInputRef.current) {
                 fileInputRef.current.value = ''
             }
@@ -264,17 +239,17 @@ export function VideoUploader({
                 className="hidden"
             />
 
-            {/* Real Progress Bar UI */}
-            {isUploading && (
-                <div className="space-y-2">
+            {/* Local Progress Bar UI - Only visible if THIS uploader is active */}
+            {isThisUploading && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
                         <span>Uploading...</span>
-                        <span>{uploadProgress}%</span>
+                        <span>{globalProgress}%</span>
                     </div>
                     <div className="relative w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                         <div
                             className="absolute inset-y-0 left-0 bg-purple-600 transition-all duration-300 ease-out"
-                            style={{ width: `${uploadProgress}%` }}
+                            style={{ width: `${globalProgress}%` }}
                         />
                     </div>
                 </div>
