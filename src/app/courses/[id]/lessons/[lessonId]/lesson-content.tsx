@@ -50,6 +50,7 @@ interface LessonContentProps {
     isEnrolled: boolean
     initialComments: any[]
     currentUser: any
+    userProgress?: any
 }
 
 type Tab = 'playlist' | 'resources' | 'qa' | 'notes'
@@ -64,10 +65,12 @@ export function LessonContent({
     lessonId,
     isEnrolled,
     initialComments,
-    currentUser
+    currentUser,
+    userProgress
 }: LessonContentProps) {
     const router = useRouter()
-    const [completed, setCompleted] = useState(initialCompleted)
+    // Initialize progress from props, default to 0
+    const [currentProgress, setCurrentProgress] = useState(userProgress?.progress || 0)
     const [expandedModules, setExpandedModules] = useState<string[]>([])
     const [activeTab, setActiveTab] = useState<Tab>('playlist')
     const [currentTime, setCurrentTime] = useState(0)
@@ -144,9 +147,10 @@ export function LessonContent({
         setCurrentTime(time)
     }
 
-    const handleProgress = async (progress: number) => {
+    const handleProgress = async (progress: number, time: number) => {
         try {
-            await trackVideoProgress(lessonId, progress)
+            setCurrentProgress(progress) // Update local state immediately
+            await trackVideoProgress(lessonId, progress, time)
         } catch (err) {
             console.error('Failed to track progress:', err)
         }
@@ -155,7 +159,7 @@ export function LessonContent({
     const handleComplete = async () => {
         try {
             await markLessonComplete(lessonId)
-            setCompleted(true)
+            setCurrentProgress(100) // Force 100% on complete
 
             // Auto-play next lesson
             const currentIndex = allLessons.findIndex(l => l.id === lessonId)
@@ -207,12 +211,14 @@ export function LessonContent({
                                     videoUrl={videoToken.videoUrl}
                                     userEmail={videoToken.watermark.userEmail}
                                     userId={videoToken.watermark.userId}
+                                    lessonId={lessonId}
                                     sessionId={videoToken.watermark.sessionId}
                                     ipAddress={videoToken.watermark.ipAddress}
                                     chaptersUrl={`/api/lessons/${lessonId}/chapters`}
                                     onTimeUpdate={handleTimeUpdate}
                                     onProgress={handleProgress}
                                     onComplete={handleComplete}
+                                    initialTime={userProgress?.last_watched_second || 0}
                                 />
                             </div>
 
@@ -220,7 +226,7 @@ export function LessonContent({
                             <div className="space-y-4">
                                 <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                                     <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white line-clamp-2">{lesson.title}</h1>
-                                    {completed && (
+                                    {Math.round(currentProgress) === 100 && (
                                         <span className="self-start flex items-center gap-2 text-green-600 dark:text-green-400 text-xs lg:text-sm font-medium px-3 py-1.5 bg-green-100 dark:bg-green-500/10 rounded-full flex-shrink-0">
                                             <CheckCircle className="w-4 h-4" />
                                             Completed

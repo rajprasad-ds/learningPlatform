@@ -106,7 +106,7 @@ export async function markLessonComplete(lessonId: string) {
 }
 
 // Track video progress
-export async function trackVideoProgress(lessonId: string, progress: number) {
+export async function trackVideoProgress(lessonId: string, progress: number, currentSecond: number) {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -127,10 +127,30 @@ export async function trackVideoProgress(lessonId: string, progress: number) {
             lesson_id: lessonId,
             course_id: lesson.modules.course_id,
             progress: Math.round(progress),
+            last_watched_second: Math.round(currentSecond),
             last_watched_at: new Date().toISOString(),
+        }, {
+            onConflict: 'user_id,lesson_id'
         })
 
     return { success: true }
+}
+
+// Get user's progress for a specific lesson
+export async function getLessonProgress(lessonId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return null
+
+    const { data: progress } = await supabase
+        .from('lesson_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('lesson_id', lessonId)
+        .single()
+
+    return progress
 }
 
 // Get course lessons

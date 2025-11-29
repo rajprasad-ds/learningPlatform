@@ -26,12 +26,14 @@ interface ProtectedVideoPlayerProps {
     videoUrl: string
     userEmail: string
     userId: string
+    lessonId: string
     sessionId: string
     ipAddress?: string
     chaptersUrl?: string
     onTimeUpdate?: (time: number) => void
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number, time: number) => void
     onComplete?: () => void
+    initialTime?: number
 }
 
 export interface ProtectedVideoPlayerRef {
@@ -42,12 +44,14 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     videoUrl,
     userEmail,
     userId,
+    lessonId,
     sessionId,
     ipAddress,
     chaptersUrl,
     onTimeUpdate: onTimeUpdateProp,
     onProgress,
     onComplete,
+    initialTime = 0,
 }, ref) => {
     const playerRef = useRef<MediaPlayerInstance | null>(null)
     const containerRef = useRef<HTMLDivElement | null>(null)
@@ -125,22 +129,121 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     }, [textTracks, duration, chaptersUrl])
 
     // ----------------------
+    // Initialize Time & Handle Unload/Unmount
+    // ----------------------
+    useEffect(() => {
+        if (!playerRef.current) return
+
+        // 1. Reconcile Server Time vs LocalStorage
+        const localTime = localStorage.getItem(`progress_${lessonId}`)
+        const serverTime = initialTime
+
+        // Use the furthest point (or server time if local is invalid)
+        let startTime = serverTime
+        if (localTime) {
+            const localSeconds = parseFloat(localTime)
+            if (!isNaN(localSeconds) && localSeconds > serverTime) {
+                startTime = localSeconds
+            }
+        }
+
+        // Set time once player is ready
+        const onCanPlay = () => {
+            if (playerRef.current && Math.abs(playerRef.current.currentTime - startTime) > 1) {
+                playerRef.current.currentTime = startTime
+            }
+        }
+
+        playerRef.current.addEventListener('can-play', onCanPlay, { once: true })
+
+        // 2. Save on Tab Close / Refresh / Navigation (Unmount)
+        const saveProgress = () => {
+            if (!playerRef.current) return
+
+            const time = playerRef.current.currentTime
+            const duration = playerRef.current.duration
+
+            // Save to LocalStorage
+            localStorage.setItem(`progress_${lessonId}`, time.toString())
+
+            // Send beacon for reliable delivery during unload
+            const data = new FormData()
+            data.append('lessonId', lessonId)
+            data.append('time', time.toString())
+            if (duration) {
+                data.append('progress', ((time / duration) * 100).toString())
+            }
+
+            // Use sendBeacon if available (reliable for unload)
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon('/api/video/progress', data)
+            } else {
+                fetch('/api/video/progress', {
+                    method: 'POST',
+                    body: data,
+                    keepalive: true
+                }).catch(console.error)
+            }
+        }
+
+        const handleBeforeUnload = () => {
+            saveProgress()
+        }
+
+        window.addEventListener('beforeunload', handleBeforeUnload)
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+            playerRef.current?.removeEventListener('can-play', onCanPlay)
+            saveProgress() // Trigger save on component unmount (SPA navigation)
+        }
+    }, [lessonId, initialTime])
+
+    // ----------------------
+    // Hybrid Sync Strategy
+    // ----------------------
+    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const lastServerSyncTime = useRef<number>(0)
+
+    // 2. Heartbeat & Event Sync
+    const syncProgress = async (time: number, force = false) => {
+        if (!duration) return
+
+        // Save to LocalStorage (Instant)
+        localStorage.setItem(`progress_${lessonId}`, time.toString())
+
+        // Sync to Server (Throttled or Forced)
+        const now = Date.now()
+        if (force || now - lastServerSyncTime.current > 10000) { // 10s heartbeat
+            lastServerSyncTime.current = now
+            const progress = (time / duration) * 100
+            if (onProgress) onProgress(progress, time) // This calls the server action wrapper in parent
+        }
+    }
+
+    // ----------------------
     // onTimeUpdate -> forward to parent but suppress progress emit during hover scrubs
     // ----------------------
     const onTimeUpdate = (detail: any) => {
         const time = detail.currentTime
-        const dur = detail.duration
 
         if (onTimeUpdateProp) onTimeUpdateProp(time)
 
-        if (onProgress && time && dur && !isHovering.current) {
-            const progress = (time / dur) * 100
-            if (Number.isFinite(progress)) onProgress(progress)
+        if (!isHovering.current) {
+            syncProgress(time, false)
         }
     }
 
     const onEnded = () => {
         onComplete?.()
+        localStorage.removeItem(`progress_${lessonId}`) // Clear local progress on completion
+    }
+
+    // Sync on Pause/Seek (Event-based)
+    const onPause = () => {
+        if (playerRef.current) {
+            syncProgress(playerRef.current.currentTime, true)
+        }
     }
 
     // ----------------------
@@ -183,6 +286,7 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                 className="w-full h-full"
                 onTimeUpdate={onTimeUpdate}
                 onEnded={onEnded}
+                onPause={onPause}
                 ref={playerRef}
             >
                 <MediaProvider>

@@ -1,4 +1,4 @@
-import { getLessonById, generateVideoToken, getCourseModules } from '@/actions/video-actions'
+import { getLessonById, generateVideoToken, getCourseModules, getLessonProgress } from '@/actions/video-actions'
 import { getLessonComments } from '@/actions/comment-actions'
 import { LessonContent } from './lesson-content'
 import Link from 'next/link'
@@ -15,11 +15,12 @@ export default async function LessonViewer({ params }: LessonViewerProps) {
 
     try {
         // Fetch all required data in parallel
-        const [lesson, videoToken, modules, comments] = await Promise.all([
+        const [lesson, videoToken, modules, comments, userProgress] = await Promise.all([
             getLessonById(lessonId),
             generateVideoToken(lessonId),
             getCourseModules(id),
-            getLessonComments(lessonId)
+            getLessonComments(lessonId),
+            getLessonProgress(lessonId)
         ])
 
         // Check enrollment status
@@ -44,12 +45,13 @@ export default async function LessonViewer({ params }: LessonViewerProps) {
                 videoToken={videoToken}
                 modules={modules}
                 allLessons={allLessons}
-                initialCompleted={false} // TODO: Fetch actual completion status
+                initialCompleted={userProgress?.completed || false}
                 courseId={id}
                 lessonId={lessonId}
                 isEnrolled={isEnrolled}
                 initialComments={comments}
                 currentUser={user}
+                userProgress={userProgress}
             />
         )
     } catch (error: any) {
