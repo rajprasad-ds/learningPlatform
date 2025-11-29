@@ -176,7 +176,7 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                 src={videoUrl}
                 viewType="video"
                 streamType="on-demand"
-                logLevel="warn"
+                logLevel="silent"
                 crossOrigin="anonymous"
                 playsInline
                 title="Course Video"
