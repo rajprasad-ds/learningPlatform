@@ -1,5 +1,5 @@
 'use client'
-
+//this will be a backup
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import {
     MediaPlayer,
@@ -15,8 +15,7 @@ import {
     usePlaybackRateOptions,
     type MediaPlayerInstance,
     type VideoQuality,
-    type PlaybackRateOption,
-    type TextTrack
+    type PlaybackRateOption
 } from '@vidstack/react'
 import {
     Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -57,22 +56,6 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
     const containerRef = useRef<HTMLDivElement>(null)
     const remote = useMediaRemote(playerRef)
     const duration = useMediaState('duration', playerRef)
-    const textTracks = useMediaState('textTracks', playerRef) // Reactive text tracks
-    const isPaused = useMediaState('paused', playerRef) // Reactive paused state
-
-    // Hover-scrub state & refs
-    const hoverRef = useRef<{ originalTime: number, wasPlaying: boolean, isHovering: boolean }>({
-        originalTime: 0,
-        wasPlaying: false,
-        isHovering: false
-    })
-    const [hoverTime, setHoverTime] = useState<number | null>(null)
-    const [hoverPct, setHoverPct] = useState<number>(0) // 0-100
-    const [hoverChapterLabel, setHoverChapterLabel] = useState<string | null>(null)
-    const [chaptersCues, setChaptersCues] = useState<any[]>([])
-
-    // Prevent emitting progress while hover-scrubbing
-    const isHovering = useRef(false)
 
     useImperativeHandle(ref, () => ({
         seekTo: (time: number) => {
@@ -84,41 +67,7 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
         }
     }))
 
-    // Parse chapters from text tracks
-    useEffect(() => {
-        if (!textTracks) return
-
-        const chaptersTrack = textTracks.find(t => t.kind === 'chapters')
-        if (chaptersTrack) {
-            // We need to wait for cues to be loaded if they aren't already
-            const updateCues = () => {
-                const loadedCues = Array.from(chaptersTrack.cues || []).map((c: any) => ({
-                    startTime: c.startTime,
-                    endTime: (c as any).endTime ?? (c as any).end ?? null,
-                    text: c.text
-                }))
-
-                // If endTime isn't present in cues (some sources), compute from next cue
-                const withEnds = loadedCues.map((c, idx) => ({
-                    ...c,
-                    endTime: c.endTime ?? (loadedCues[idx + 1]?.startTime ?? duration ?? 0)
-                }))
-                setChaptersCues(withEnds)
-            }
-
-            // If cues are already loaded
-            if (chaptersTrack.cues && chaptersTrack.cues.length > 0) {
-                updateCues()
-            }
-
-            // Listen for cue changes (when they load)
-            chaptersTrack.addEventListener('cue-change', updateCues)
-
-            return () => {
-                chaptersTrack.removeEventListener('cue-change', updateCues)
-            }
-        }
-    }, [textTracks, duration, chaptersUrl])
+    // ... rest of component
 
 
     // Handle progress updates
@@ -126,19 +75,25 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
         const time = detail.currentTime
         const duration = detail.duration
 
+        // console.log('Video Time Update:', time, duration) // Debug log
+
         // Call time update prop (seconds)
         if (onTimeUpdateProp) {
             onTimeUpdateProp(time)
         }
 
-        // Call progress prop (percentage) - ONLY if not hovering
-        if (onProgress && time && duration && !isHovering.current) {
+        // Call progress prop (percentage)
+        if (onProgress && time && duration) {
             const progress = (time / duration) * 100
             if (Number.isFinite(progress)) {
                 onProgress(progress)
             }
         }
     }
+
+
+
+
 
     // Handle completion
     const onEnded = () => {
@@ -197,10 +152,10 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                 </div>
 
                 {/* Custom Controls Layout */}
-                <Controls.Root className="absolute inset-0 z-[60] flex flex-col justify-between opacity-0 transition-opacity duration-300 data-[visible]:opacity-100 bg-gradient-to-t from-black/80 via-transparent to-transparent">
+                <Controls.Root className="absolute inset-0 z-[60] flex flex-col justify-between opacity-0 transition-opacity duration-300 data-[visible]:opacity-100">
 
                     {/* Top Group (Optional: Title or Back button could go here) */}
-                    <Controls.Group className="w-full p-4">
+                    <Controls.Group className="w-full p-4 bg-gradient-to-b from-black/60 to-transparent">
                     </Controls.Group>
 
                     {/* Center Group (Play/Pause Overlay) */}
@@ -209,132 +164,51 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
                     </div>
 
                     {/* Bottom Group (Main Controls) */}
-                    <Controls.Group className="w-full px-4 pb-2 mt-auto">
-                        <div className="flex flex-col w-full">
+                    <Controls.Group className="w-full p-4 mt-auto">
+                        <div className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 shadow-xl">
 
                             <TimeSlider.Root
-                                className="relative w-full h-8 group/slider flex items-center cursor-pointer select-none touch-none"
-                                onPointerEnter={(e: any) => {
-                                    // Begin hover scrubbing session
-                                    if (!playerRef.current) return
-                                    hoverRef.current.originalTime = playerRef.current.currentTime ?? 0
-                                    // FIX: Use the captured isPaused state or read from player directly if needed.
-                                    hoverRef.current.wasPlaying = !playerRef.current.paused
-
-                                    hoverRef.current.isHovering = true
-                                    isHovering.current = true
-                                    // pause to update frames on set currentTime
-                                    remote.pause()
-                                }}
-                                onPointerMove={(e: any) => {
-                                    // compute hoverTime from pointer position
-                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                                    const x = e.clientX - rect.left
-                                    const pct = Math.max(0, Math.min(1, x / rect.width))
-                                    setHoverPct(pct * 100)
-
-                                    if (!duration || !Number.isFinite(duration)) return
-                                    const time = pct * duration
-                                    setHoverTime(time)
-
-                                    // set player time to show the frame (do not emit progress while hovering)
-                                    if (playerRef.current) playerRef.current.currentTime = time
-
-                                    // compute current chapter label if any
-                                    const cue = chaptersCues.find(c => time >= c.startTime && time < c.endTime)
-                                    setHoverChapterLabel(cue ? cue.text : null)
-                                }}
-                                onPointerLeave={() => {
-                                    // end hover scrub session, restore original time if not committed
-                                    hoverRef.current.isHovering = false
-                                    isHovering.current = false
-                                    setHoverTime(null)
-                                    setHoverChapterLabel(null)
-
-                                    // restore original playback position and play state
-                                    if (playerRef.current) {
-                                        playerRef.current.currentTime = hoverRef.current.originalTime ?? playerRef.current.currentTime
-                                        if (hoverRef.current.wasPlaying) remote.play()
-                                    }
-                                }}
-                                onClick={(e: any) => {
-                                    // commit the hover time as the new playback position
-                                    if (hoverTime != null && playerRef.current) {
-                                        playerRef.current.currentTime = hoverTime
-                                        remote.play()
-                                        // also clear hover state
-                                        hoverRef.current.isHovering = false
-                                        setHoverTime(null)
-                                        setHoverChapterLabel(null)
-                                        isHovering.current = false
-                                    }
-                                }}
+                                className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer select-none touch-none"
                             >
-                                {/* Background track and buffer/progress as before */}
-                                <TimeSlider.Track className="relative w-full h-[3px] bg-white/20 rounded-full group-hover/slider:h-[5px] transition-all duration-200">
+                                <TimeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden">
                                     <TimeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-20 w-[var(--slider-fill)] will-change-[width]" />
                                     <TimeSlider.Progress className="absolute top-0 left-0 h-full bg-white/50 rounded-full z-10 w-[var(--slider-progress)] will-change-[width]" />
-
-                                    {/* CHAPTER SEGMENTS: draw duration-based colored blocks */}
-                                    {chaptersCues.map((c, idx) => {
-                                        const left = ((c.startTime / duration) * 100) || 0
-                                        const width = (((c.endTime - c.startTime) / duration) * 100) || 0.5 // min width
-                                        // Use separators instead of alternating colors for cleaner look
-                                        return (
-                                            <div
-                                                key={c.startTime}
-                                                className="absolute top-0 h-full z-30 border-r-2 border-black/20 pointer-events-none"
-                                                style={{ left: `${left + width}%` }}
-                                            />
-                                        )
-                                    })}
-
-                                    <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-purple-600 rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-all duration-200 z-40 left-[var(--slider-fill)] will-change-[left] group-hover/slider:w-4 group-hover/slider:h-4" />
                                 </TimeSlider.Track>
 
-                                {/* Hover label box (time + chapter) - shown only during pointer hover */}
-                                {hoverTime != null && (
-                                    <div
-                                        className="absolute -top-12 transform -translate-x-1/2 z-50 pointer-events-none"
-                                        style={{ left: `${hoverPct}%` }}
-                                    >
-                                        <div className="bg-black/90 text-white text-xs px-2 py-1.5 rounded-md shadow-lg border border-white/10 flex flex-col items-center min-w-[60px] whitespace-nowrap">
-                                            <div className="font-bold font-mono">
-                                                {/* format time */}
-                                                {(() => {
-                                                    const s = Math.floor(hoverTime)
-                                                    const mins = Math.floor(s / 60)
-                                                    const secs = s % 60
-                                                    return `${mins}:${secs.toString().padStart(2, '0')}`
-                                                })()}
+                                <TimeSlider.Chapters className="absolute inset-0 w-full h-full z-20">
+                                    {(cues, forwardRef) =>
+                                        cues.map((cue) => (
+                                            <div
+                                                className="absolute top-0 h-full w-1 bg-black/50 hover:bg-black z-30 flex flex-col items-center justify-start group/chapter"
+                                                style={{ left: `${(cue.startTime / duration) * 100}%` }}
+                                                key={cue.startTime}
+                                                ref={forwardRef}
+                                            >
+                                                <div className="opacity-0 group-hover/chapter:opacity-100 absolute bottom-full mb-2 bg-black/80 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap transition-opacity">
+                                                    {cue.text}
+                                                </div>
                                             </div>
-                                            {hoverChapterLabel && <div className="text-[10px] text-white/80 mt-0.5 max-w-[200px] truncate">{hoverChapterLabel}</div>}
-                                        </div>
-                                    </div>
-                                )}
+                                        ))
+                                    }
+                                </TimeSlider.Chapters>
+
+                                <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30 ring-2 ring-purple-500 left-[var(--slider-fill)] will-change-[left]" />
                             </TimeSlider.Root>
 
-                            <div className="flex items-center justify-between mt-1">
+                            <div className="flex items-center justify-between">
                                 {/* Left Controls */}
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-4">
                                     <PlayPauseButton />
-                                    <div className="flex items-center gap-2 group/volume">
-                                        <VolumeButton />
-                                        <VolumeSlider.Root className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 relative h-5 flex items-center">
-                                            <VolumeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden">
-                                                <VolumeSlider.TrackFill className="absolute top-0 left-0 h-full bg-white rounded-full" />
-                                            </VolumeSlider.Track>
-                                            <VolumeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-sm opacity-0 group-hover/volume:opacity-100" />
-                                        </VolumeSlider.Root>
-                                    </div>
+                                    <VolumeControl />
                                     <TimeDisplay />
                                 </div>
 
                                 {/* Right Controls */}
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                     <QualityController />
                                     <SpeedController />
                                     <ScreenshotButton containerRef={containerRef} />
+                                    <div className="w-px h-4 bg-white/10 mx-1"></div>
                                     <FullscreenButton />
                                 </div>
                             </div>
@@ -349,6 +223,8 @@ export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, Protecte
 ProtectedVideoPlayer.displayName = 'ProtectedVideoPlayer'
 
 // --- Sub-Components ---
+
+
 
 function PlayPauseOverlay() {
     const isPaused = useMediaState('paused')
@@ -370,25 +246,33 @@ function PlayPauseButton() {
     return (
         <button
             onClick={() => isPaused ? remote.play() : remote.pause()}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
+            className="text-white hover:text-purple-400 transition-colors"
         >
             {isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5 fill-current" />}
         </button>
     )
 }
 
-function VolumeButton() {
+function VolumeControl() {
     const volume = useMediaState('volume')
     const isMuted = useMediaState('muted')
     const remote = useMediaRemote()
 
     return (
-        <button
-            onClick={() => isMuted ? remote.unmute() : remote.mute()}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
-        >
-            {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2 group/volume">
+            <button
+                onClick={() => isMuted ? remote.unmute() : remote.mute()}
+                className="text-white hover:text-purple-400 transition-colors"
+            >
+                {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+            <VolumeSlider.Root className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-300 relative h-5 flex items-center">
+                <VolumeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden">
+                    <VolumeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-500 rounded-full" />
+                </VolumeSlider.Track>
+                <VolumeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-sm opacity-0 group-hover/volume:opacity-100" />
+            </VolumeSlider.Root>
+        </div>
     )
 }
 
@@ -403,7 +287,7 @@ function TimeDisplay() {
     }
 
     return (
-        <span className="text-white text-xs font-medium font-mono ml-2">
+        <span className="text-white/80 text-xs font-medium font-mono">
             {formatTime(currentTime)} / {formatTime(duration)}
         </span>
     )
@@ -531,11 +415,11 @@ function ScreenshotButton({ containerRef }: { containerRef: React.RefObject<HTML
     return (
         <button
             onClick={handleScreenshot}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors group/shot relative"
+            className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors group/shot relative"
             title="Take Screenshot"
         >
             <Camera className="w-5 h-5" />
-            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/shot:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/shot:opacity-100 transition-opacity whitespace-nowrap">
                 Screenshot
             </span>
         </button>
@@ -549,7 +433,7 @@ function FullscreenButton() {
     return (
         <button
             onClick={() => isFullscreen ? remote.exitFullscreen() : remote.enterFullscreen()}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 text-white transition-colors"
+            className="text-white hover:text-purple-400 transition-colors"
         >
             {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
         </button>
