@@ -244,7 +244,8 @@ export async function getCourseModules(courseId: string) {
                 is_free,
                 type,
                 module_id,
-                video_url
+                video_url,
+                chapters
             )
         `)
         .eq('course_id', courseId)
@@ -321,6 +322,24 @@ export async function updateLessonVideo(lessonId: string, videoId: string, chapt
             video_url: `bunny://${videoId}`,
             video_provider: 'bunny',
             video_id: videoId,
+            chapters: chapters
+        })
+        .eq('id', lessonId)
+
+    if (error) throw error
+    return { success: true }
+}
+
+// Update lesson chapters only
+export async function saveLessonChapters(lessonId: string, chapters: any[]) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) throw new Error('Unauthorized')
+
+    const { error } = await supabase
+        .from('lessons')
+        .update({
             chapters: chapters
         })
         .eq('id', lessonId)

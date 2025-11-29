@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ProtectedVideoPlayer } from '@/components/video/protected-video-player'
+import { ProtectedVideoPlayer, ProtectedVideoPlayerRef } from '@/components/video/protected-video-player'
 import { markLessonComplete, trackVideoProgress } from '@/actions/video-actions'
 import {
     ChevronLeft, CheckCircle, Lock, PlayCircle, ChevronDown, ChevronRight,
     FileText, MessageCircle, BookOpen, Download, AlertCircle, ListVideo
 } from 'lucide-react'
 import Link from 'next/link'
+import { CommentSection } from '@/components/courses/comment-section'
 
 interface Lesson {
     id: string
@@ -37,8 +38,6 @@ interface VideoToken {
         ipAddress: string
     }
 }
-
-import { CommentSection } from '@/components/courses/comment-section'
 
 interface LessonContentProps {
     lesson: Lesson
@@ -73,6 +72,13 @@ export function LessonContent({
     const [activeTab, setActiveTab] = useState<Tab>('playlist')
     const [currentTime, setCurrentTime] = useState(0)
     const activeLessonRef = useRef<HTMLButtonElement>(null)
+    const playerRef = useRef<ProtectedVideoPlayerRef>(null)
+
+    const handleTimestampClick = (time: number) => {
+        if (playerRef.current) {
+            playerRef.current.seekTo(time)
+        }
+    }
 
     // Google-style Hover Scroll Logic
     useEffect(() => {
@@ -197,6 +203,7 @@ export function LessonContent({
                             {/* Video Player */}
                             <div className="bg-gray-900 dark:bg-zinc-900 rounded-xl lg:rounded-2xl overflow-hidden shadow-2xl border border-gray-200 dark:border-zinc-800 aspect-video">
                                 <ProtectedVideoPlayer
+                                    ref={playerRef}
                                     videoUrl={videoToken.videoUrl}
                                     userEmail={videoToken.watermark.userEmail}
                                     userId={videoToken.watermark.userId}
@@ -355,10 +362,7 @@ export function LessonContent({
                                         comments={initialComments}
                                         currentUser={currentUser}
                                         currentTime={currentTime}
-                                        onTimestampClick={(time) => {
-                                            // TODO: Implement seek
-                                            console.log('Seek to:', time)
-                                        }}
+                                        onTimestampClick={handleTimestampClick}
                                     />
                                 </div>
                             )}

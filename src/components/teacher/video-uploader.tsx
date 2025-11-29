@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createVideoEntry, updateLessonVideo } from '@/actions/video-actions'
-import { Upload, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { createVideoEntry, updateLessonVideo, saveLessonChapters } from '@/actions/video-actions'
+import { Upload, CheckCircle, AlertTriangle, X, Save } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface VideoUploaderProps {
@@ -11,6 +11,7 @@ interface VideoUploaderProps {
     moduleTitle: string
     lessonTitle: string
     currentVideoUrl?: string | null
+    initialChapters?: { title: string, startTime: number }[]
     onUploadComplete?: () => void
 }
 
@@ -20,6 +21,7 @@ export function VideoUploader({
     moduleTitle,
     lessonTitle,
     currentVideoUrl,
+    initialChapters = [],
     onUploadComplete
 }: VideoUploaderProps) {
     const [isUploading, setIsUploading] = useState(false)
@@ -29,7 +31,7 @@ export function VideoUploader({
     const fileInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
 
-    const [chapters, setChapters] = useState<{ title: string, startTime: number }[]>([])
+    const [chapters, setChapters] = useState<{ title: string, startTime: number }[]>(initialChapters)
     const [newChapterTitle, setNewChapterTitle] = useState('')
     const [newChapterTime, setNewChapterTime] = useState('')
 
@@ -56,6 +58,18 @@ export function VideoUploader({
 
     const removeChapter = (index: number) => {
         setChapters(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const handleSaveChapters = async () => {
+        try {
+            await saveLessonChapters(lessonId, chapters)
+            setSuccess(true)
+            setTimeout(() => setSuccess(false), 3000)
+            router.refresh()
+        } catch (err) {
+            console.error('Failed to save chapters:', err)
+            setError('Failed to save chapters')
+        }
     }
 
     async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -178,6 +192,18 @@ export function VideoUploader({
                                 </button>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {chapters.length > 0 && (
+                    <div className="flex justify-end">
+                        <button
+                            onClick={handleSaveChapters}
+                            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                        >
+                            <Save className="w-4 h-4" />
+                            Save Chapters
+                        </button>
                     </div>
                 )}
             </div>

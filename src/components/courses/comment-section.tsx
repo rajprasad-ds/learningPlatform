@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { addComment } from '@/actions/comment-actions'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Send, Clock } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 interface Comment {
     id: string
@@ -52,21 +52,132 @@ export function CommentSection({
     const [newComment, setNewComment] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [includeTimestamp, setIncludeTimestamp] = useState(false)
-    const router = useRouter()
+    const supabase = createClient()
+
+    // Real-time Subscription
+    useEffect(() => {
+        const channel = supabase
+            .channel('realtime-comments')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'comments',
+                    filter: `lesson_id=eq.${lessonId}`
+                },
+                async (payload) => {
+                    const newComment = payload.new as any
+
+                    // Avoid duplicating our own optimistic comment
+                    // We check if we already have a comment with the same ID (if we had it)
+                    // OR if it's from the current user, we might want to replace the optimistic one.
+                    // Simple heuristic: If it's from current user, we ignore it because we added it optimistically.
+                    // BUT, the optimistic one has a fake ID.
+                    // Better: We fetch the profile for the new comment and add it if it's NOT from us.
+                    // If it IS from us, we should ideally replace the optimistic one with the real one to get the real ID.
+
+                    if (newComment.user_id === currentUser?.id) {
+                        // It's our comment coming back from the server.
+                        // We should replace the optimistic comment (which has a temp ID) with this real one.
+                        // Since we don't know which one is the "optimistic" one easily without a temp ID,
+                        // we can just reload the list or swap it.
+                        // For now, to prevent flicker, let's just ignore it if we see it's from us,
+                        // assuming the optimistic one is "good enough" until a refresh.
+                        // actually, let's fetch the profile and update it properly so we have the real ID.
+
+                        // Fetch profile for the new comment
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('full_name, avatar_url, role')
+                            .eq('id', newComment.user_id)
+                            .single()
+
+                        if (profile) {
+                            const completeComment: Comment = {
+                                ...newComment,
+                                profiles: profile
+                            }
+
+                            setComments((prev) => {
+                                // Remove the optimistic comment (identified by 'optimistic' flag or just being recent and from us)
+                                // Since we don't have a flag, let's just filter out any recent comment from us that looks identical?
+                                // No, that's risky.
+                                // Let's just PREPEND the real one and filter out the optimistic one if we can find it.
+                                // Actually, simpler: Just keep the optimistic one.
+                                // The issue is if the user tries to delete it, they need the real ID.
+                                // So we MUST replace it.
+
+                                // Let's find the optimistic comment. It's likely the first one from this user.
+                                const index = prev.findIndex(c => c.user_id === currentUser.id && c.id.startsWith('temp-'))
+                                if (index !== -1) {
+                                    const newComments = [...prev]
+                                    newComments[index] = completeComment
+                                    return newComments
+                                }
+                                // If we didn't find an optimistic one (maybe it wasn't added yet?), add this one.
+                                return [completeComment, ...prev]
+                            })
+                        }
+                    } else {
+                        // It's someone else's comment. Fetch profile and add.
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('full_name, avatar_url, role')
+                            .eq('id', newComment.user_id)
+                            .single()
+
+                        if (profile) {
+                            const completeComment: Comment = {
+                                ...newComment,
+                                profiles: profile
+                            }
+                            setComments((prev) => [completeComment, ...prev])
+                        }
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [lessonId, supabase, currentUser])
+
 
     const handleSubmit = async () => {
         if (!newComment.trim()) return
 
         setIsSubmitting(true)
-        try {
-            const timestamp = includeTimestamp && currentTime ? Math.floor(currentTime) : undefined
-            await addComment(lessonId, newComment, timestamp)
+        const timestamp = includeTimestamp && currentTime ? Math.floor(currentTime) : undefined
 
-            setNewComment('')
-            setIncludeTimestamp(false)
-            router.refresh()
+        // Optimistic Update
+        const optimisticComment: Comment = {
+            id: `temp-${Date.now()}`, // Temporary ID
+            content: newComment,
+            created_at: new Date().toISOString(),
+            timestamp: timestamp,
+            user_id: currentUser?.id,
+            profiles: {
+                full_name: currentUser?.user_metadata?.full_name,
+                avatar_url: currentUser?.user_metadata?.avatar_url,
+                role: 'student' // Default, we don't know for sure but it's UI only
+            }
+        }
+
+        setComments((prev) => [optimisticComment, ...prev])
+        setNewComment('')
+        setIncludeTimestamp(false)
+
+        try {
+            await addComment(lessonId, newComment, timestamp)
+            // We don't need to do anything here, the Realtime subscription will handle the "confirmation"
+            // by replacing our temp ID with the real one (logic in useEffect).
         } catch (error) {
             console.error('Failed to post comment:', error)
+            // Rollback optimistic update
+            setComments((prev) => prev.filter(c => c.id !== optimisticComment.id))
+            alert('Failed to post comment. Please try again.')
         } finally {
             setIsSubmitting(false)
         }
@@ -140,7 +251,7 @@ export function CommentSection({
                     </div>
                 ) : (
                     comments.map((comment) => (
-                        <div key={comment.id} className="flex gap-4 group">
+                        <div key={comment.id} className="flex gap-4 group animate-in fade-in slide-in-from-top-2 duration-300">
                             <Avatar className="w-8 h-8 mt-1">
                                 <AvatarImage src={comment.profiles.avatar_url || undefined} />
                                 <AvatarFallback>{comment.profiles.full_name?.charAt(0) || 'U'}</AvatarFallback>

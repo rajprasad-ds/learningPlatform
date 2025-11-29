@@ -19,6 +19,7 @@ interface Lesson {
     position: number
     video_url: string | null
     is_free: boolean
+    chapters?: { title: string, startTime: number }[]
 }
 
 interface CurriculumBuilderProps {
@@ -139,6 +140,7 @@ export function CurriculumBuilder({ courseId, courseTitle, initialModules }: Cur
                                                     moduleTitle={module.title}
                                                     lessonTitle={lesson.title}
                                                     currentVideoUrl={lesson.video_url}
+                                                    initialChapters={lesson.chapters}
                                                 />
                                             </div>
                                         )}

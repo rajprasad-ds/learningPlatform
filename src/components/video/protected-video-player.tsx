@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import {
     MediaPlayer,
     MediaProvider,
@@ -37,7 +37,11 @@ interface ProtectedVideoPlayerProps {
     onComplete?: () => void
 }
 
-export function ProtectedVideoPlayer({
+export interface ProtectedVideoPlayerRef {
+    seekTo: (time: number) => void
+}
+
+export const ProtectedVideoPlayer = forwardRef<ProtectedVideoPlayerRef, ProtectedVideoPlayerProps>(({
     videoUrl,
     userEmail,
     userId,
@@ -47,11 +51,24 @@ export function ProtectedVideoPlayer({
     onTimeUpdate: onTimeUpdateProp,
     onProgress,
     onComplete,
-}: ProtectedVideoPlayerProps) {
+}, ref) => {
     const playerRef = useRef<MediaPlayerInstance>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const remote = useMediaRemote(playerRef)
     const duration = useMediaState('duration', playerRef)
+
+    useImperativeHandle(ref, () => ({
+        seekTo: (time: number) => {
+            if (playerRef.current) {
+                playerRef.current.currentTime = time
+                // Optional: Auto-play if paused
+                remote.play()
+            }
+        }
+    }))
+
+    // ... rest of component
+
 
     // Handle progress updates
     const onTimeUpdate = (detail: any) => {
@@ -158,6 +175,23 @@ export function ProtectedVideoPlayer({
                                     <TimeSlider.Progress className="absolute top-0 left-0 h-full bg-white/50 rounded-full z-10 w-[var(--slider-progress)] will-change-[width]" />
                                 </TimeSlider.Track>
 
+                                <TimeSlider.Chapters className="absolute inset-0 w-full h-full z-20">
+                                    {(cues, forwardRef) =>
+                                        cues.map((cue) => (
+                                            <div
+                                                className="absolute top-0 h-full w-1 bg-black/50 hover:bg-black z-30 flex flex-col items-center justify-start group/chapter"
+                                                style={{ left: `${(cue.startTime / duration) * 100}%` }}
+                                                key={cue.startTime}
+                                                ref={forwardRef}
+                                            >
+                                                <div className="opacity-0 group-hover/chapter:opacity-100 absolute bottom-full mb-2 bg-black/80 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap transition-opacity">
+                                                    {cue.text}
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+                                </TimeSlider.Chapters>
+
                                 <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30 ring-2 ring-purple-500 left-[var(--slider-fill)] will-change-[left]" />
                             </TimeSlider.Root>
 
@@ -184,7 +218,9 @@ export function ProtectedVideoPlayer({
             </MediaPlayer >
         </div >
     )
-}
+})
+
+ProtectedVideoPlayer.displayName = 'ProtectedVideoPlayer'
 
 // --- Sub-Components ---
 

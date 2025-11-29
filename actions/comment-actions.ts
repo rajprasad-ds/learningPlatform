@@ -46,7 +46,7 @@ export async function addComment(lessonId: string, content: string, timestamp?: 
 
     if (error) throw error
 
-    revalidatePath(`/courses/[id]/lessons/${lessonId}`)
+    // revalidatePath(`/courses/[id]/lessons/${lessonId}`) // Removed to prevent video reload
     return { success: true }
 }
 
