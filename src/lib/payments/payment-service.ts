@@ -21,10 +21,8 @@ export class PaymentService {
             }
         };
 
-        console.log('Creating Razorpay order with options:', options)
         try {
             const order = await razorpay.orders.create(options);
-            console.log('Razorpay order created:', order)
             return order;
         } catch (error) {
             console.error('Razorpay order creation failed:', error)

@@ -13,7 +13,6 @@ import {
     useMediaRemote,
     useVideoQualityOptions,
     usePlaybackRateOptions,
-    useSliderState,
     type MediaPlayerInstance,
     type VideoQuality,
     type PlaybackRateOption
@@ -33,6 +32,7 @@ interface ProtectedVideoPlayerProps {
     sessionId: string
     ipAddress?: string
     chaptersUrl?: string
+    onTimeUpdate?: (time: number) => void
     onProgress?: (progress: number) => void
     onComplete?: () => void
 }
@@ -44,6 +44,7 @@ export function ProtectedVideoPlayer({
     sessionId,
     ipAddress,
     chaptersUrl,
+    onTimeUpdate: onTimeUpdateProp,
     onProgress,
     onComplete,
 }: ProtectedVideoPlayerProps) {
@@ -54,9 +55,22 @@ export function ProtectedVideoPlayer({
 
     // Handle progress updates
     const onTimeUpdate = (detail: any) => {
-        if (onProgress && detail.currentTime && detail.duration) {
-            const progress = (detail.currentTime / detail.duration) * 100
-            onProgress(progress)
+        const time = detail.currentTime
+        const duration = detail.duration
+
+        // console.log('Video Time Update:', time, duration) // Debug log
+
+        // Call time update prop (seconds)
+        if (onTimeUpdateProp) {
+            onTimeUpdateProp(time)
+        }
+
+        // Call progress prop (percentage)
+        if (onProgress && time && duration) {
+            const progress = (time / duration) * 100
+            if (Number.isFinite(progress)) {
+                onProgress(progress)
+            }
         }
     }
 
@@ -136,32 +150,15 @@ export function ProtectedVideoPlayer({
                     <Controls.Group className="w-full p-4 mt-auto">
                         <div className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 p-3 shadow-xl">
 
-                            {/* Time Slider with Thumbnails */}
-                            <TimeSlider.Root className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer select-none touch-none">
-                                <div className="relative w-full h-1">
-                                    <TimeSlider.Track className="absolute inset-0 w-full h-full bg-white/20 rounded-full overflow-hidden">
-                                        <CustomTrackFill />
-                                    </TimeSlider.Track>
+                            <TimeSlider.Root
+                                className="relative w-full h-5 group/slider mb-2 flex items-center cursor-pointer select-none touch-none"
+                            >
+                                <TimeSlider.Track className="relative w-full h-1 bg-white/20 rounded-full overflow-hidden">
+                                    <TimeSlider.TrackFill className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-20 w-[var(--slider-fill)] will-change-[width]" />
+                                    <TimeSlider.Progress className="absolute top-0 left-0 h-full bg-white/50 rounded-full z-10 w-[var(--slider-progress)] will-change-[width]" />
+                                </TimeSlider.Track>
 
-                                    {/* Chapters Markers */}
-                                    {chaptersUrl && (
-                                        <TimeSlider.Chapters className="absolute inset-0 w-full h-full z-10">
-                                            {(cues, forwardRef) => (
-                                                <div className="relative w-full h-full flex items-center" ref={forwardRef}>
-                                                    {cues.map((cue) => (
-                                                        <div
-                                                            key={cue.startTime}
-                                                            className="absolute top-0 w-0.5 h-full bg-white/50"
-                                                            style={{ left: `${(cue.startTime / duration) * 100}%` }}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </TimeSlider.Chapters>
-                                    )}
-                                </div>
-
-                                <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30" />
+                                <TimeSlider.Thumb className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover/slider:opacity-100 transition-opacity z-30 ring-2 ring-purple-500 left-[var(--slider-fill)] will-change-[left]" />
                             </TimeSlider.Root>
                             <div className="flex items-center justify-between">
                                 {/* Left Controls */}
@@ -190,18 +187,7 @@ export function ProtectedVideoPlayer({
 
 // --- Sub-Components ---
 
-function CustomTrackFill() {
-    const value = useSliderState('value')
-    const max = useSliderState('max')
-    const percent = max > 0 ? (value / max) * 100 : 0
 
-    return (
-        <div
-            className="absolute top-0 left-0 h-full bg-purple-600 rounded-full z-20 transition-[width] duration-100 ease-linear"
-            style={{ width: `${percent}%` }}
-        />
-    )
-}
 
 function PlayPauseOverlay() {
     const isPaused = useMediaState('paused')

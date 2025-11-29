@@ -25,7 +25,14 @@ export function EnrollButton({ courseId }: EnrollButtonProps) {
         try {
             const result = await purchaseCourse(courseId)
 
-            if (result.success && result.orderId) {
+            if (result.success) {
+                // Handle Free Course (Instant Enrollment)
+                if (!result.orderId) {
+                    router.refresh()
+                    return
+                }
+
+                // Handle Paid Course (Razorpay)
                 const options = {
                     key: result.key,
                     amount: result.amount,

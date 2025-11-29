@@ -12,8 +12,6 @@ export async function POST(req: Request) {
             courseId,
         } = await req.json();
 
-        console.log('Verifying payment:', { razorpay_order_id, razorpay_payment_id, userId, courseId });
-
         const body = razorpay_order_id + "|" + razorpay_payment_id;
 
         const expectedSignature = crypto
@@ -22,7 +20,6 @@ export async function POST(req: Request) {
             .digest("hex");
 
         const isAuthentic = expectedSignature === razorpay_signature;
-        console.log('Signature verification:', { isAuthentic, expectedSignature, received: razorpay_signature });
 
         if (isAuthentic) {
             const supabase = createAdminClient();
@@ -42,13 +39,11 @@ export async function POST(req: Request) {
             });
 
             if (paymentError) {
-                console.error("Error recording payment:", paymentError);
                 return NextResponse.json(
                     { success: false, message: "Payment recording failed" },
                     { status: 500 }
                 );
             }
-            console.log('Payment recorded successfully');
 
             // 2. Create Enrollment
             const { error: enrollmentError } = await supabase
@@ -59,27 +54,23 @@ export async function POST(req: Request) {
                 });
 
             if (enrollmentError) {
-                console.error("Error creating enrollment:", enrollmentError);
                 return NextResponse.json(
                     { success: false, message: "Enrollment failed" },
                     { status: 500 }
                 );
             }
-            console.log('Enrollment created successfully');
 
             return NextResponse.json({
                 success: true,
                 message: "Payment verified and enrollment created",
             });
         } else {
-            console.warn('Invalid signature');
             return NextResponse.json(
                 { success: false, message: "Invalid signature" },
                 { status: 400 }
             );
         }
     } catch (error) {
-        console.error("Error verifying payment:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

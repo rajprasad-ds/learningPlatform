@@ -1,4 +1,5 @@
 import { getLessonById, generateVideoToken, getCourseModules } from '@/actions/video-actions'
+import { getLessonComments } from '@/actions/comment-actions'
 import { LessonContent } from './lesson-content'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
@@ -14,10 +15,11 @@ export default async function LessonViewer({ params }: LessonViewerProps) {
 
     try {
         // Fetch all required data in parallel
-        const [lesson, videoToken, modules] = await Promise.all([
+        const [lesson, videoToken, modules, comments] = await Promise.all([
             getLessonById(lessonId),
             generateVideoToken(lessonId),
-            getCourseModules(id)
+            getCourseModules(id),
+            getLessonComments(lessonId)
         ])
 
         // Check enrollment status
@@ -46,6 +48,8 @@ export default async function LessonViewer({ params }: LessonViewerProps) {
                 courseId={id}
                 lessonId={lessonId}
                 isEnrolled={isEnrolled}
+                initialComments={comments}
+                currentUser={user}
             />
         )
     } catch (error: any) {

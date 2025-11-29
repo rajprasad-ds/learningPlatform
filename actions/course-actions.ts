@@ -203,10 +203,6 @@ export async function purchaseCourse(courseId: string) {
         }
     } catch (error) {
         console.error('Purchase failed:', error)
-        if (error instanceof Error) {
-            console.error('Error message:', error.message)
-            console.error('Error stack:', error.stack)
-        }
         return { success: false, error: 'Purchase failed' }
     }
 }

@@ -36,28 +36,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     initialize: async () => {
         if (get().initialized) return
 
-        const supabase = createClient()
+        try {
+            const supabase = createClient()
 
-        // Get initial session
-        const { data: { user } } = await supabase.auth.getUser()
+            // Get initial session
+            const { data: { user } } = await supabase.auth.getUser()
 
-        let profile: Profile | null = null
-        if (user) {
-            const { data } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single()
-            profile = data
-        }
-
-        set({ user, profile, loading: false, initialized: true })
-
-        // Listen for auth changes
-        supabase.auth.onAuthStateChange(async (_event, session) => {
-            const user = session?.user ?? null
             let profile: Profile | null = null
-
             if (user) {
                 const { data } = await supabase
                     .from('profiles')
@@ -67,8 +52,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 profile = data
             }
 
-            set({ user, profile, loading: false })
-        })
+            set({ user, profile, loading: false, initialized: true })
+
+            // Listen for auth changes
+            supabase.auth.onAuthStateChange(async (_event, session) => {
+                const user = session?.user ?? null
+                let profile: Profile | null = null
+
+                if (user) {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single()
+                    profile = data
+                }
+
+                set({ user, profile, loading: false })
+            })
+        } catch (error) {
+            console.error('Auth initialization failed:', error)
+            set({ user: null, profile: null, loading: false, initialized: true })
+        }
     },
 
     refreshUser: async () => {
