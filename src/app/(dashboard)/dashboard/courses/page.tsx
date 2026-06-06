@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { getEnrolledCourses } from '@/actions/course-actions'
 import CourseList from './course-list'
 

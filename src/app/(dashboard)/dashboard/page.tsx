@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+
+
 import { getLastWatchedLesson, getDashboardStats } from '@/actions/dashboard-actions'
 import { getEnrolledCourses } from '@/actions/course-actions'
 import { ContinueWatching } from '@/components/dashboard/continue-watching'
