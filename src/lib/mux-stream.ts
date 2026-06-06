@@ -1,4 +1,4 @@
-import { SignJwt } from 'jose'
+import { SignJWT } from 'jose'
 
 // Mux API configuration
 const MUX_TOKEN_ID = process.env.MUX_TOKEN_ID!
@@ -29,7 +29,7 @@ export async function generateSignedURL(options: SignedURLOptions): Promise<stri
         const now = Math.floor(Date.now() / 1000)
         const exp = now + expiresIn
 
-        const token = await new SignJwt({
+        const token = await new SignJWT({
             sub: videoId,
             aud: 'v', // 'v' for video playback
             exp: exp,
