@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { generateSignedURL } from '@/lib/bunny-stream'
+import { generateSignedURL, getUploadUrl, getVideoPlaybackInfo } from '@/lib/mux-stream'
 
 // Generate video access token
 export async function generateVideoToken(lessonId: string) {
@@ -32,7 +32,7 @@ export async function generateVideoToken(lessonId: string) {
     // Check if lesson is free
     if (lesson.is_free) {
         // Free lessons don't need enrollment check
-        return generateToken(lesson.video_url, user.id, user.email!)
+        return await generateToken(lesson.video_url, user.id, user.email!)
     }
 
     // Check enrollment
@@ -61,7 +61,7 @@ export async function generateVideoToken(lessonId: string) {
     })
 
     // Generate token
-    return generateToken(lesson.video_url, user.id, user.email!)
+    return await generateToken(lesson.video_url, user.id, user.email!)
 }
 
 // Refresh video token
@@ -206,22 +206,22 @@ export async function getLessonById(lessonId: string) {
 }
 
 // Helper functions
-function generateToken(videoUrl: string, userId: string, userEmail: string) {
+async function generateToken(videoUrl: string, userId: string, userEmail: string) {
     if (!videoUrl) {
         throw new Error('Video URL not found for this lesson')
     }
 
-    // Extract video ID from URL (assuming format: bunny://video-id or just video-id)
-    const videoId = videoUrl.replace('bunny://', '')
+    // Extract video ID from URL (assuming format: mux://assetId or just assetId)
+    const assetId = videoUrl.replace('mux://', '')
 
     const sessionId = Math.random().toString(36).substring(7).toUpperCase()
-    const ipAddress = getClientIP()
 
-    // Generate signed URL with Bunny.net
-    const signedUrl = generateSignedURL({
-        videoId,
+    // Generate signed URL with Mux
+    const signedUrl = await generateSignedURL({
+        videoId: assetId,
         expiresIn: 3600, // 1 hour
-        ipAddress,
+        userId,
+        userEmail,
     })
 
     return {
@@ -232,7 +232,6 @@ function generateToken(videoUrl: string, userId: string, userEmail: string) {
             userEmail,
             userId,
             sessionId,
-            ipAddress,
         }
     }
 }
@@ -288,12 +287,13 @@ export async function fixLessonVideoUrls() {
     const supabase = await createClient()
 
     // Update all lessons that don't have a video_url
+    // Note: You should replace these with actual Mux assetIds
     const { error } = await supabase
         .from('lessons')
         .update({
-            video_url: 'bunny://782751f8-6b03-4221-a6aa-9dae6acc900f',
-            video_provider: 'bunny',
-            video_id: '782751f8-6b03-4221-a6aa-9dae6acc900f'
+            video_url: 'mux://test-asset-id',
+            video_provider: 'mux',
+            video_id: 'test-asset-id'
         })
         .is('video_url', null)
 
@@ -301,36 +301,28 @@ export async function fixLessonVideoUrls() {
     return { success: true }
 }
 
-// Create video entry in Bunny.net (Step 1 of upload)
+// Create video entry in Mux (Step 1 of upload)
 export async function createVideoEntry(title: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error('Unauthorized')
 
-    const response = await fetch(`https://video.bunnycdn.com/library/${process.env.BUNNY_STREAM_LIBRARY_ID}/videos`, {
-        method: 'POST',
-        headers: {
-            'AccessKey': process.env.BUNNY_API_KEY!,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ title }),
-    })
-
-    if (!response.ok) {
+    try {
+        const { assetId, uploadUrl } = await getUploadUrl(title)
+        return {
+            success: true,
+            assetId,
+            uploadUrl,
+        }
+    } catch (error) {
+        console.error('Failed to create video entry:', error)
         throw new Error('Failed to create video entry')
-    }
-
-    const data = await response.json()
-    return {
-        success: true,
-        videoId: data.guid as string,
-        libraryId: process.env.BUNNY_STREAM_LIBRARY_ID
     }
 }
 
 // Update lesson with video ID and chapters after successful upload
-export async function updateLessonVideo(lessonId: string, videoId: string, chapters: any[] = []) {
+export async function updateLessonVideo(lessonId: string, assetId: string, chapters: any[] = []) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -339,9 +331,9 @@ export async function updateLessonVideo(lessonId: string, videoId: string, chapt
     const { error } = await supabase
         .from('lessons')
         .update({
-            video_url: `bunny://${videoId}`,
-            video_provider: 'bunny',
-            video_id: videoId,
+            video_url: `mux://${assetId}`,
+            video_provider: 'mux',
+            video_id: assetId,
             chapters: chapters
         })
         .eq('id', lessonId)

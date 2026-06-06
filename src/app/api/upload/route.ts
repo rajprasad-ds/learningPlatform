@@ -11,20 +11,18 @@ export async function PUT(request: Request) {
         }
 
         const { searchParams } = new URL(request.url)
-        const videoId = searchParams.get('videoId')
-        const libraryId = process.env.BUNNY_STREAM_LIBRARY_ID
-        const apiKey = process.env.BUNNY_API_KEY
+        const assetId = searchParams.get('assetId')
+        const uploadUrl = searchParams.get('uploadUrl')
 
-        if (!videoId || !libraryId || !apiKey) {
-            return NextResponse.json({ error: 'Missing configuration' }, { status: 400 })
+        if (!assetId || !uploadUrl) {
+            return NextResponse.json({ error: 'Missing assetId or uploadUrl' }, { status: 400 })
         }
 
-        // Stream the request body directly to Bunny.net
+        // Stream the request body directly to Mux
         // This avoids loading the entire file into memory
-        const bunnyResponse = await fetch(`https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`, {
+        const muxResponse = await fetch(uploadUrl, {
             method: 'PUT',
             headers: {
-                'AccessKey': apiKey,
                 'Content-Type': 'application/octet-stream',
             },
             body: request.body, // Pass the stream directly
@@ -32,9 +30,9 @@ export async function PUT(request: Request) {
             duplex: 'half'
         })
 
-        if (!bunnyResponse.ok) {
-            const errorText = await bunnyResponse.text()
-            console.error('Bunny upload failed:', errorText)
+        if (!muxResponse.ok) {
+            const errorText = await muxResponse.text()
+            console.error('Mux upload failed:', errorText)
             return NextResponse.json({ error: 'Upload to provider failed' }, { status: 502 })
         }
 
