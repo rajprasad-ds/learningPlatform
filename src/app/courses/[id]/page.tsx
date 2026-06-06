@@ -187,7 +187,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
                                                 <span className="ml-auto text-sm font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">50% OFF</span>
                                             </div>
 
-                                            <EnrollButton courseId={course.id} price={course.price} />
+                                            <EnrollButton courseId={course.id} />
 
                                             <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-6">
                                                 30-day money-back guarantee • Lifetime access
